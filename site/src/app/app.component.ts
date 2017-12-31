@@ -197,7 +197,7 @@ const geneticTextureEval = {
     19: grad,
 };
 
-function evalNode(node: Node, environment: Environment): any {
+function evalNode(node: Node, environment: Environment): Color {
     return geneticTextureEval[node.texture](node, environment);
 }
 
@@ -219,8 +219,15 @@ function renderEvoArt(context: CanvasRenderingContext2D, evoArt: EvoArt, width: 
     };
 
     const rootNode = evoArt.root;
-    (window as any).abc = [];
+    // (window as any).abc = [];
     const start = performance.now();
+
+    const imageData = context.getImageData(0, 0, width, height);
+
+    const buffer = new ArrayBuffer(imageData.data.length);
+    const buffer8 = new Uint8ClampedArray(buffer);
+    const data = new Uint32Array(buffer);
+
     for (let x = 0; x < width; x++) {
         for (let y = 0; y < height; y++) {
             
@@ -236,9 +243,18 @@ function renderEvoArt(context: CanvasRenderingContext2D, evoArt: EvoArt, width: 
 
             // (window as any).abc.push(color)
 
-            setPixel(context, pixel, color);
+            data[y * width + x] = 
+                (255 << 24) |
+                (Math.round(color.b * 256) << 16) |
+                (Math.round(color.g * 256) << 8) |
+                Math.round(color.r * 256);
         }
     }
+
+    imageData.data.set(buffer8);
+
+    context.putImageData(imageData, 0, 0);
+
     console.log(performance.now() - start)
 }
 
