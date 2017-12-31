@@ -27,6 +27,7 @@ export const enum GeneticTexture {
     Warp = 21, // ?
     Filter = 22, // ?
     // HSVtoRGB = 23, // ?
+    Mod = 23,
 }
 
 export type NodeArg = Node | number | Color;
@@ -63,8 +64,14 @@ export interface Environment {
 
 export type Primary = number | Color;
 
-function getPrimaryType(primary: Primary): 'number' | 'color' {
-    return typeof primary === 'number' ? 'number' : 'color';
+export const enum PrimaryType {
+    Any = 1,
+    Number = 2,
+    Color = 3,
+}
+
+function getPrimaryType(primary: Primary): PrimaryType {
+    return typeof primary === 'number' ? PrimaryType.Number : PrimaryType.Color;
 }
 
 function wrapWithType(primary: Primary) {
@@ -84,7 +91,7 @@ function bindColor(color: Color): Color {
 }
 
 function toColor(primary: Primary): Color {
-    if (typeof primary === 'object') return primary as Color;
+    if ((typeof primary) === 'object') return primary as Color;
     return bindColor({
         r: primary as number,
         g: primary as number,
@@ -100,7 +107,7 @@ function binaryColorExpression(node: Node, env: Environment, op: (left: Color, r
 
     const result = wrapWithType(op(left, right));
 
-    return result.type === 'color' 
+    return result.type === PrimaryType.Color 
         ? bindColor(result.value as Color) 
         : result.value;
 }
@@ -110,7 +117,7 @@ function binaryExpression(node: Node, env: Environment, op: (left: number, right
     const left = wrapWithType(evalNode(node.args[0] as Node, env));
     const right = wrapWithType(evalNode(node.args[1] as Node, env));
 
-    if (left.type === right.type && left.type === 'number') {
+    if (left.type === right.type && left.type === PrimaryType.Number) {
         return op((left.value as number), (right.value as number));
     }
 
@@ -130,7 +137,7 @@ function unaryExpression(node: Node, env: Environment, op: (operand: number) => 
     
     const operand = wrapWithType(evalNode(node.args[0] as Node, env));
 
-    if (operand.type === 'number') {
+    if (operand.type === PrimaryType.Number) {
         return op(operand.value as number);
     }
 
@@ -195,7 +202,73 @@ const geneticTextureEval = {
     17: (node, env) => unaryExpression(node, env, op => Math.abs(op)),
     18: noise,
     19: grad,
+    23: (node, env) => binaryExpression(node, env, (l, r) => l % r),
 };
+
+const geneticTextureDef = {
+    0: { args: [], return: PrimaryType.Number },
+    1: { args: [], return: PrimaryType.Number },
+    2: { args: [PrimaryType.Number], return: PrimaryType.Color },
+    3: { args: [PrimaryType.Number], return: PrimaryType.Number },
+    4: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+    5: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+    6: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+    7: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+    8: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+    9: { args: [PrimaryType.Any], return: PrimaryType.Any },
+    10: { args: [PrimaryType.Any], return: PrimaryType.Any },
+    11: { args: [PrimaryType.Any], return: PrimaryType.Any },
+    12: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+    13: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+    14: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Number },
+    15: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Color },
+    16: { args: [PrimaryType.Any], return: PrimaryType.Any },
+    17: { args: [PrimaryType.Any], return: PrimaryType.Any },
+    18: { args: [], return: PrimaryType.Color },
+    19: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Color },
+    23: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+};
+
+const geneticTextureReturns = {
+    [PrimaryType.Color]: [
+        { type: 2, args: [PrimaryType.Number], return: PrimaryType.Color },
+        { type: 4, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+        { type: 5, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+        { type: 6, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+        { type: 7, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+        { type: 8, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+        { type: 9, args: [PrimaryType.Any], return: PrimaryType.Any },
+        { type: 10, args: [PrimaryType.Any], return: PrimaryType.Any },
+        { type: 11, args: [PrimaryType.Any], return: PrimaryType.Any },
+        { type: 12, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+        { type: 13, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+        { type: 15, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Color },
+        { type: 16, args: [PrimaryType.Any], return: PrimaryType.Any },
+        { type: 17, args: [PrimaryType.Any], return: PrimaryType.Any },
+        { type: 18, args: [], return: PrimaryType.Color },
+        { type: 19, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Color },
+        { type: 23, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+    ],
+    [PrimaryType.Number]: [
+        { type: 0, args: [], return: PrimaryType.Number },
+        { type: 1, args: [], return: PrimaryType.Number },
+        { type: 3, args: [PrimaryType.Number], return: PrimaryType.Number },
+        { type: 4, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+        { type: 5, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+        { type: 6, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+        { type: 7, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+        { type: 8, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+        { type: 9, args: [PrimaryType.Any], return: PrimaryType.Any },
+        { type: 10, args: [PrimaryType.Any], return: PrimaryType.Any },
+        { type: 11, args: [PrimaryType.Any], return: PrimaryType.Any },
+        { type: 12, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+        { type: 13, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+        { type: 14, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Number },
+        { type: 16, args: [PrimaryType.Any], return: PrimaryType.Any },
+        { type: 17, args: [PrimaryType.Any], return: PrimaryType.Any },
+        { type: 23, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+    ],
+}
 
 function evalNode(node: Node, environment: Environment): Color {
     return geneticTextureEval[node.texture](node, environment);
@@ -245,9 +318,9 @@ function renderEvoArt(context: CanvasRenderingContext2D, evoArt: EvoArt, width: 
 
             data[y * width + x] = 
                 (255 << 24) |
-                (Math.round(color.b * 256) << 16) |
-                (Math.round(color.g * 256) << 8) |
-                Math.round(color.r * 256);
+                (Math.round(color.b * 255) << 16) |
+                (Math.round(color.g * 255) << 8) |
+                Math.round(color.r * 255);
         }
     }
 
@@ -256,6 +329,76 @@ function renderEvoArt(context: CanvasRenderingContext2D, evoArt: EvoArt, width: 
     context.putImageData(imageData, 0, 0);
 
     console.log(performance.now() - start)
+}
+
+function generateRandomEvoArt(maxDepth: number): EvoArt {
+
+    return {
+        randomSeed: Math.random(),
+        root: getRandomNode(maxDepth),
+    };
+}
+
+function getRandomNode(maxDepth: number, returns: PrimaryType = PrimaryType.Color, depth = 0): Node {
+
+    if (depth >= maxDepth - 1) {
+        return getRandomTerminal(returns);
+    }
+
+    const textures = geneticTextureReturns[returns];
+    const randomTexture = Math.round(textures.length * Math.random());
+
+}
+
+function convertAnysToTypes(returns: PrimaryType, args: PrimaryType[]): PrimaryType[] {
+    
+    if (returns === PrimaryType.Number) {
+        
+        return new Array(args.length).fill(PrimaryType.Number);
+
+    } else if (returns === PrimaryType.Color) {
+
+        // Pick random number of color args for every any arg
+
+    } else { // Either type works
+
+    }
+}
+
+function getRandomTerminal(type: PrimaryType): Node {
+
+    const randTerminalType = Math.random();
+
+    if (type === PrimaryType.Color || (type === PrimaryType.Any && randTerminalType >= .5)) {
+        return {
+            texture: GeneticTexture.Color,
+            args: [{
+                r: Math.random(),
+                g: Math.random(),
+                b: Math.random(),
+                a: 1,
+            }],
+        };
+    }
+
+    const randNumberType = Math.random();
+
+    if (randNumberType <= .33) {
+        return {
+            texture: GeneticTexture.Const,
+            args: [Math.random()],
+        };
+    } else if (randNumberType > .33 && randNumberType <= .66) {
+        return {
+            texture: GeneticTexture.X,
+            args: [],
+        };
+    } else {
+        return {
+            texture: GeneticTexture.Y,
+            args: [],
+        };
+    }
 }
 
 const testEvoArt: EvoArt = {
