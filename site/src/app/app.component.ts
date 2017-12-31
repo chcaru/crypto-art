@@ -202,7 +202,7 @@ const geneticTextureEval = {
     17: (node, env) => unaryExpression(node, env, op => Math.abs(op)),
     18: noise,
     19: grad,
-    23: (node, env) => binaryExpression(node, env, (l, r) => l % r),
+    // 23: (node, env) => binaryExpression(node, env, (l, r) => l % r),
 };
 
 const geneticTextureDef = {
@@ -217,7 +217,7 @@ const geneticTextureDef = {
     8: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
     9: { args: [PrimaryType.Any], return: PrimaryType.Any },
     10: { args: [PrimaryType.Any], return: PrimaryType.Any },
-    11: { args: [PrimaryType.Any], return: PrimaryType.Any },
+    // 11: { args: [PrimaryType.Any], return: PrimaryType.Any },
     12: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
     13: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
     14: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Number },
@@ -239,15 +239,15 @@ const geneticTextureReturns = {
         { type: 8, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
         { type: 9, args: [PrimaryType.Any], return: PrimaryType.Any },
         { type: 10, args: [PrimaryType.Any], return: PrimaryType.Any },
-        { type: 11, args: [PrimaryType.Any], return: PrimaryType.Any },
-        { type: 12, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-        { type: 13, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+        // { type: 11, args: [PrimaryType.Any], return: PrimaryType.Any },
+        // { type: 12, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+        // { type: 13, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
         { type: 15, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Color },
-        { type: 16, args: [PrimaryType.Any], return: PrimaryType.Any },
+        // { type: 16, args: [PrimaryType.Any], return: PrimaryType.Any },
         { type: 17, args: [PrimaryType.Any], return: PrimaryType.Any },
         { type: 18, args: [], return: PrimaryType.Color },
         { type: 19, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Color },
-        { type: 23, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+        // { type: 23, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
     ],
     [PrimaryType.Number]: [
         { type: 0, args: [], return: PrimaryType.Number },
@@ -260,13 +260,13 @@ const geneticTextureReturns = {
         { type: 8, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
         { type: 9, args: [PrimaryType.Any], return: PrimaryType.Any },
         { type: 10, args: [PrimaryType.Any], return: PrimaryType.Any },
-        { type: 11, args: [PrimaryType.Any], return: PrimaryType.Any },
-        { type: 12, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-        { type: 13, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+        // { type: 11, args: [PrimaryType.Any], return: PrimaryType.Any },
+        // { type: 12, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+        // { type: 13, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
         { type: 14, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Number },
-        { type: 16, args: [PrimaryType.Any], return: PrimaryType.Any },
+        // { type: 16, args: [PrimaryType.Any], return: PrimaryType.Any },
         { type: 17, args: [PrimaryType.Any], return: PrimaryType.Any },
-        { type: 23, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+        // { type: 23, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
     ],
 }
 
@@ -346,22 +346,57 @@ function getRandomNode(maxDepth: number, returns: PrimaryType = PrimaryType.Colo
     }
 
     const textures = geneticTextureReturns[returns];
-    const randomTexture = Math.round(textures.length * Math.random());
+    const randomTexture = textures[Math.floor(textures.length * Math.random())];
 
+    const textureArgs = convertAnysToTypes(randomTexture.args, randomTexture.return);
+
+    return {
+        texture: randomTexture.type,
+        args: textureArgs.map(arg => getRandomNode(maxDepth, arg, depth + 1)),
+    };
 }
 
-function convertAnysToTypes(returns: PrimaryType, args: PrimaryType[]): PrimaryType[] {
+function convertAnysToTypes(args: PrimaryType[], returns: PrimaryType): PrimaryType[] {
     
-    if (returns === PrimaryType.Number) {
+    if (args.length === 0) {
+
+        return [];
+
+    } if (!args.some(a => a === PrimaryType.Any)) {
+
+        return args.slice();
+
+    } else if (returns === PrimaryType.Number) {
         
         return new Array(args.length).fill(PrimaryType.Number);
 
     } else if (returns === PrimaryType.Color) {
 
-        // Pick random number of color args for every any arg
+        let randomizedArgs = args.slice();
+        
+        while (!randomizedArgs.some(a => a === PrimaryType.Color)) {
+
+            randomizedArgs = args
+                .map(a => 
+                    a === PrimaryType.Any
+                        ? Math.random() >= .5
+                            ? PrimaryType.Color
+                            : PrimaryType.Number
+                        : a
+                );
+        }
+
+        return randomizedArgs;
 
     } else { // Either type works
 
+        return args.map(a => 
+            a === PrimaryType.Any
+                ? Math.random() >= .5
+                    ? PrimaryType.Color
+                    : PrimaryType.Number
+                : a
+        );
     }
 }
 
@@ -547,6 +582,8 @@ export class AppComponent {
     @ViewChild('test')
     public canvas: ElementRef;
 
+    public evoArtTree: string;
+
     public ngOnInit(): void {
         const context = this.canvas.nativeElement.getContext('2d') as CanvasRenderingContext2D;
         console.log(this, context)
@@ -556,5 +593,16 @@ export class AppComponent {
         // Represent image as genetically derived equation
         // How to represent it in Solidity?
 
+    }
+
+    public onNew(): void {
+
+        const context = this.canvas.nativeElement.getContext('2d') as CanvasRenderingContext2D;
+
+        const randomEvoArt = generateRandomEvoArt(4);
+
+        renderEvoArt(context, randomEvoArt, 256, 256);
+
+        this.evoArtTree = JSON.stringify(randomEvoArt, null, 2);
     }
 }
