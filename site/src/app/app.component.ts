@@ -503,39 +503,55 @@ function blur(node: Node, env: Environment): RGBView {
 
     const rgbView = env.newRGBView();
     const writeRGB = rgbView.write;
-    const readRGB = sourceRGBView.read;
+    let readRGB = sourceRGBView.read;
 
     const height = env.height;
     const width = env.width;
 
-    for (let x = 1; x < width - 1; x++) {
-        for (let y = 1; y < height - 1; y++) {
+    for (let i = 0; i < 3; i++) {
+        for (let x = 0; x < width; x++) {
+            for (let y = 0; y < height; y++) {
+    
+                let r = 0;
+                let g = 0;
+                let b = 0;
 
-            let r = 0;
-            let g = 0;
-            let b = 0;
+                let p = 0;
+    
+                for (let u = -1; u < 2; u++) {
+                    for (let v = -1; v < 2; v++) {
+                        
+                        const uvx = x + u;
+                        const uvy = y + v;
 
-            for (let u = -1; u < 2; u++) {
-                for (let v = -1; v < 2; v++) {
-                    
-                    let uv8 = ((y + v) * width + (x + u)) * 4;
+                        // Could be unraveled more to handle special cases
+                        // for each corner and the sides, but perf diff is too small right now...
+                        if (uvx > -1 && uvx < width && uvy > -1 && uvy < width) {
 
-                    r += readRGB[uv8];
-                    g += readRGB[++uv8];
-                    b += readRGB[++uv8];
+                            let uv8 = (uvy * width + uvx) * 4;
+        
+                            r += readRGB[uv8];
+                            g += readRGB[++uv8];
+                            b += readRGB[++uv8];
+
+                            p++;
+                        }
+                    }
                 }
+    
+                r /= p;
+                g /= p;
+                b /= p;
+    
+                writeRGB[y * width + x] =
+                    -16777216 |
+                    (Math.round(b) << 16) |
+                    (Math.round(g) << 8) |
+                    Math.round(r);
             }
-
-            r /= 9;
-            g /= 9;
-            b /= 9;
-
-            writeRGB[y * width + x] =
-                -16777216 |
-                (Math.round(b) << 16) |
-                (Math.round(g) << 8) |
-                Math.round(r);
         }
+
+        readRGB = rgbView.read;
     }
 
     return rgbView;
