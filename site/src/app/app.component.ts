@@ -36,7 +36,8 @@ export const enum GeneticTexture {
     Mod = 24,
     Invert = 25,
     Atan = 27,
-    Dissolve = 28 // ????
+    Ifs = 28,
+    CrossDissolve = 29,
 }
 
 export type NodeArg = Node | number | Color;
@@ -164,7 +165,7 @@ function binaryElementWiseRGBViewExpression(env: Environment, left: RGBView, rig
             const i32 = y * width + x;
             let i8 = i32 * 4 + 2;
 
-            // // R
+            // // B
             // leftViewRead[i8]
             // rightViewRead[i8]
 
@@ -172,7 +173,7 @@ function binaryElementWiseRGBViewExpression(env: Environment, left: RGBView, rig
             // leftViewRead[--i8]
             // rightViewRead[i8]
 
-            // // B
+            // // R
             // leftViewRead[--i8]
             // rightViewRead[i8]
 
@@ -474,6 +475,72 @@ function colorToView(env: Environment, { r, g, b }: Color): RGBView {
     return rgbView;
 }
 
+function blur(node: Node, env: Environment): RGBView {
+
+    const operand = wrapWithType(evalNode(node.args[0] as Node, env));
+
+    let sourceRGBView: RGBView;
+
+    if (operand.type === PrimaryType.Number) {
+
+        sourceRGBView = colorToView(env, toColor(operand.value as number));
+
+    } else if (operand.type === PrimaryType.Color) {
+
+        sourceRGBView = colorToView(env, operand.value as Color);
+
+    } else if (operand.type === PrimaryType.View) {
+
+        if ((operand.value as View).type === ViewType.RGB) {
+
+            sourceRGBView = operand.value as RGBView;
+
+        } else { // BW
+
+            sourceRGBView = bwToRGB(env, operand.value as BWView);
+        }
+    }
+
+    const rgbView = env.newRGBView();
+    const writeRGB = rgbView.write;
+    const readRGB = sourceRGBView.read;
+
+    const height = env.height;
+    const width = env.width;
+
+    for (let x = 1; x < width - 1; x++) {
+        for (let y = 1; y < height - 1; y++) {
+
+            let r = 0;
+            let g = 0;
+            let b = 0;
+
+            for (let u = -1; u < 2; u++) {
+                for (let v = -1; v < 2; v++) {
+                    
+                    let uv8 = ((y + v) * width + (x + u)) * 4;
+
+                    r += readRGB[uv8];
+                    g += readRGB[++uv8];
+                    b += readRGB[++uv8];
+                }
+            }
+
+            r /= 9;
+            g /= 9;
+            b /= 9;
+
+            writeRGB[y * width + x] =
+                -16777216 |
+                (Math.round(b) << 16) |
+                (Math.round(g) << 8) |
+                Math.round(r);
+        }
+    }
+
+    return rgbView;
+}
+
 function noise(node: Node, env: Environment): RGBView {
 
     const rgbView = env.newRGBView();
@@ -569,9 +636,55 @@ function hsvToRGB(node: Node, env: Environment): RGBView {
     return rgbView;
 }
 
+function x(env: Environment): BWView {
+
+    const bwView = env.newBWView();
+    const writeBW = bwView.write;
+
+    const height = env.height;
+    const width = env.width;
+    
+    for (let x = 0; x < width; x++) {
+
+        const xf = (x / width) * 2 - 1;
+
+        for (let y = 0; y < height; y++) {
+
+            const i = y * width + x;
+
+            writeBW[i] = xf;
+        }
+    }
+
+    return bwView;
+}
+
+function y(env: Environment): BWView {
+
+    const bwView = env.newBWView();
+    const writeBW = bwView.write;
+
+    const height = env.height;
+    const width = env.width;
+    
+    for (let y = 0; y < width; y++) {
+
+        const yf = (y / width) * 2 - 1;
+
+        for (let x = 0; x < height; x++) {
+
+            const i = y * width + x;
+
+            writeBW[i] = yf;
+        }
+    }
+
+    return bwView;
+}
+
 const geneticTextureEval = {
-    0: (node, env) => env.x,
-    1: (node, env) => env.y,
+    0: (node, env) => x(env),
+    1: (node, env) => y(env),
     2: node => node.args[0],
     3: node => node.args[0],
     4: (node, env) => binaryElementWiseExpression(node, env, (l, r) => l + r),
@@ -594,6 +707,7 @@ const geneticTextureEval = {
     17: (node, env) => unaryExpression(node, env, op => Math.abs(op)),
     18: noise,
     19: grad,
+    20: blur,
     23: hsvToRGB,
     24: (node, env) => binaryElementWiseExpression(node, env, (l, r) => l % r),
 };
@@ -857,48 +971,36 @@ function getRandomTerminal(type: PrimaryType): Node {
 
 const testEvoArt: EvoArt = {
     randomSeed: 1337,
-    root: {
-        texture: GeneticTexture.Add,
+    root: 
+    {
+        texture: GeneticTexture.Blur,
         args: [
             {
-                texture: GeneticTexture.Mult,
+                texture: GeneticTexture.Add,
                 args: [
                     {
-                        texture: GeneticTexture.Grad,
+                        texture: GeneticTexture.Add,
                         args: [
                             {
-                                texture: GeneticTexture.Color,
-                                args: [{
-                                    r: 65 / 255,
-                                    g: 126 / 255,
-                                    b: 231 / 255,
-                                }],
-                            },
-                            {
-                                texture: GeneticTexture.Color,
-                                args: [{
-                                    r: 234 / 255,
-                                    g: 15 / 255,
-                                    b: 93 / 255,
-                                }],
-                            },
-                        ],
-                    },
-                    {
-                        texture: GeneticTexture.Y,
-                        args: [],
-                    },
-                ],
-            },
-            {
-                texture: GeneticTexture.Cos,
-                args: [
-                    {
-                        texture: GeneticTexture.Pow,
-                        args: [
-                            {
-                                texture: GeneticTexture.X,
-                                args: [],
+                                texture: GeneticTexture.Grad,
+                                args: [
+                                    {
+                                        texture: GeneticTexture.Color,
+                                        args: [{
+                                            r: 65 / 255,
+                                            g: 126 / 255,
+                                            b: 231 / 255,
+                                        }],
+                                    },
+                                    {
+                                        texture: GeneticTexture.Color,
+                                        args: [{
+                                            r: 234 / 255,
+                                            g: 15 / 255,
+                                            b: 93 / 255,
+                                        }],
+                                    },
+                                ],
                             },
                             {
                                 texture: GeneticTexture.Y,
@@ -906,6 +1008,24 @@ const testEvoArt: EvoArt = {
                             },
                         ],
                     },
+                    {
+                        texture: GeneticTexture.Cos,
+                        args: [
+                            {
+                                texture: GeneticTexture.Mult,
+                                args: [
+                                    {
+                                        texture: GeneticTexture.X,
+                                        args: [],
+                                    },
+                                    {
+                                        texture: GeneticTexture.Y,
+                                        args: [],
+                                    },
+                                ],
+                            },
+                        ],
+                    }
                 ],
             }
         ],
@@ -1005,7 +1125,7 @@ export class AppComponent {
         const context = this.canvas.nativeElement.getContext('2d') as CanvasRenderingContext2D;
         console.log(this, context)
         
-        renderEvoArt(context, testEvoArt, 256, 256);
+        renderEvoArt(context, testEvoArt, 512, 512);
 
         // Represent image as genetically derived equation
         // How to represent it in Solidity?
@@ -1016,7 +1136,7 @@ export class AppComponent {
 
         const context = this.canvas.nativeElement.getContext('2d') as CanvasRenderingContext2D;
 
-        const randomEvoArt = generateRandomEvoArt(4);
+        const randomEvoArt = generateRandomEvoArt(3);
 
         renderEvoArt(context, randomEvoArt, 512, 512);
 
