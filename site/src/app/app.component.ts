@@ -475,31 +475,112 @@ function colorToView(env: Environment, { r, g, b }: Color): RGBView {
     return rgbView;
 }
 
-function blur(node: Node, env: Environment): RGBView {
+function toRGBView(env: Environment, primary: Primary): RGBView {
 
-    const operand = wrapWithType(evalNode(node.args[0] as Node, env));
+    const primaryTyped = wrapWithType(primary);
 
-    let sourceRGBView: RGBView;
+    if (primaryTyped.type === PrimaryType.Number) {
 
-    if (operand.type === PrimaryType.Number) {
+        return colorToView(env, toColor(primaryTyped.value as number));
 
-        sourceRGBView = colorToView(env, toColor(operand.value as number));
+    } else if (primaryTyped.type === PrimaryType.Color) {
 
-    } else if (operand.type === PrimaryType.Color) {
+        return colorToView(env, primaryTyped.value as Color);
 
-        sourceRGBView = colorToView(env, operand.value as Color);
+    } else if (primaryTyped.type === PrimaryType.View) {
 
-    } else if (operand.type === PrimaryType.View) {
+        if ((primaryTyped.value as View).type === ViewType.RGB) {
 
-        if ((operand.value as View).type === ViewType.RGB) {
-
-            sourceRGBView = operand.value as RGBView;
+            return primaryTyped.value as RGBView;
 
         } else { // BW
 
-            sourceRGBView = bwToRGB(env, operand.value as BWView);
+            return bwToRGB(env, primaryTyped.value as BWView);
         }
     }
+}
+
+// xn+1 = a xn + b yn + c
+// yn+1 = d xn + e yn + f
+
+function ifs(node: Node, env: Environment): BWView {
+
+    const bwView = env.newBWView();
+    const writeBW = bwView.write;
+    const readBW = bwView.read;
+
+    const height = env.height;
+    const width = env.width;
+
+    let ifsSets: number[][];
+
+    const n = Math.round(env.getRandom() * 6);
+
+    let isContractive = false;
+
+    while (!isContractive) {
+
+        let contractive = true;
+        ifsSets = [];
+
+        for (let i = 0; i < n; i++) {
+
+            const set = [
+                env.getRandom() * 2 - 1,
+                env.getRandom() * 2 - 1,
+                env.getRandom() * 2 - 1,
+                env.getRandom() * 2 - 1,
+                env.getRandom() * 2 - 1,
+                env.getRandom() * 2 - 1,
+            ];
+
+            ifsSets.push(set);
+
+            const ad = set[0] * set[0] + set[3] * set[3];
+            const be = set[1] * set[1] + set[4] * set[4];
+            const aedb = set[0] * set[4] - set[1] * set[3];
+
+            contractive = contractive 
+                && ad < 1
+                && be < 1
+                && ad + be < 1 + aedb * aedb;
+        }
+
+        isContractive = contractive;
+    }
+
+    const a = []
+
+    let x = 0;
+    let y = 0;
+
+    for (let i = 0; i < 1000000; i++) {
+
+        for (let si = 0; si < n; si++) {
+
+            const ifsSet = ifsSets[si];
+            const xo = x;
+
+            x = ifsSet[0] * xo + ifsSet[1] * y + ifsSet[2];
+            y = ifsSet[3] * xo + ifsSet[4] * y + ifsSet[5];
+        }
+
+        const xx = Math.round((x + 1) / 2 * width);
+        const yy = Math.round((y + 1) / 2 * height);
+        a.push([xx, yy])
+        
+        writeBW[yy * width + xx] = 1.0;
+    }
+    console.log(a)
+
+    return bwView;
+}
+
+function blur(node: Node, env: Environment): RGBView {
+
+    const operand = evalNode(node.args[0] as Node, env);
+
+    const sourceRGBView = toRGBView(env, operand);
 
     const rgbView = env.newRGBView();
     const writeRGB = rgbView.write;
@@ -608,6 +689,7 @@ function grad(node: Node, env: Environment): RGBView {
     return rgbView;
 }
 
+// TODO: Fix, this is just broken
 function hsvToRGB(node: Node, env: Environment): RGBView {
 
     const rgbView = env.newRGBView();
@@ -726,6 +808,7 @@ const geneticTextureEval = {
     20: blur,
     23: hsvToRGB,
     24: (node, env) => binaryElementWiseExpression(node, env, (l, r) => l % r),
+    28: ifs,
 };
 
 const geneticTextureDef = {
@@ -986,143 +1069,74 @@ function getRandomTerminal(type: PrimaryType): Node {
 }
 
 const testEvoArt: EvoArt = {
-    randomSeed: 1337,
-    root: 
-    {
-        texture: GeneticTexture.Blur,
-        args: [
-            {
-                texture: GeneticTexture.Add,
-                args: [
-                    {
-                        texture: GeneticTexture.Add,
-                        args: [
-                            {
-                                texture: GeneticTexture.Grad,
-                                args: [
-                                    {
-                                        texture: GeneticTexture.Color,
-                                        args: [{
-                                            r: 65 / 255,
-                                            g: 126 / 255,
-                                            b: 231 / 255,
-                                        }],
-                                    },
-                                    {
-                                        texture: GeneticTexture.Color,
-                                        args: [{
-                                            r: 234 / 255,
-                                            g: 15 / 255,
-                                            b: 93 / 255,
-                                        }],
-                                    },
-                                ],
-                            },
-                            {
-                                texture: GeneticTexture.Y,
-                                args: [],
-                            },
-                        ],
-                    },
-                    {
-                        texture: GeneticTexture.Cos,
-                        args: [
-                            {
-                                texture: GeneticTexture.Mult,
-                                args: [
-                                    {
-                                        texture: GeneticTexture.X,
-                                        args: [],
-                                    },
-                                    {
-                                        texture: GeneticTexture.Y,
-                                        args: [],
-                                    },
-                                ],
-                            },
-                        ],
-                    }
-                ],
-            }
-        ],
-    },
-}
-
-// const gradient1 = {
-//     texture: GeneticTexture.Grad,
-//     args: [
-//         {
-//             texture: GeneticTexture.Color,
-//             args: [{
-//                 r: 65 / 255,
-//                 g: 126 / 255,
-//                 b: 231 / 255,
-//                 a: 1,
-//             }],
-//         },
-//         {
-//             texture: GeneticTexture.Color,
-//             args: [{
-//                 r: 234 / 255,
-//                 g: 15 / 255,
-//                 b: 93 / 255,
-//                 a: 1,
-//             }],
-//         },
-//     ],
-// };
-
-// const gradient2 = {
-//     texture: GeneticTexture.Grad,
-//     args: [
-//         {
-//             texture: GeneticTexture.Color,
-//             args: [{
-//                 r: 5 / 255,
-//                 g: 16 / 255,
-//                 b: 131 / 255,
-//                 a: 1,
-//             }],
-//         },
-//         {
-//             texture: GeneticTexture.Color,
-//             args: [{
-//                 r: 200 / 255,
-//                 g: 150 / 255,
-//                 b: 14 / 255,
-//                 a: 1,
-//             }],
-//         },
-//     ],
-// };
+    randomSeed: 51337,
+    root: {
+        texture: GeneticTexture.Ifs,
+        args: [],
+    }
+};
 
 // const testEvoArt: EvoArt = {
 //     randomSeed: 1337,
-//     root: {
-//         texture: GeneticTexture.Mult,
+//     root: 
+//     {
+//         texture: GeneticTexture.Blur,
 //         args: [
-//             gradient1,
 //             {
-//                 texture: GeneticTexture.Mult,
+//                 texture: GeneticTexture.Add,
 //                 args: [
 //                     {
-//                         texture: GeneticTexture.Sin,
-//                         args: [{
-//                             texture: GeneticTexture.X,
-//                             args: [],
-//                         }],
+//                         texture: GeneticTexture.Add,
+//                         args: [
+//                             {
+//                                 texture: GeneticTexture.Grad,
+//                                 args: [
+//                                     {
+//                                         texture: GeneticTexture.Color,
+//                                         args: [{
+//                                             r: 65 / 255,
+//                                             g: 126 / 255,
+//                                             b: 231 / 255,
+//                                         }],
+//                                     },
+//                                     {
+//                                         texture: GeneticTexture.Color,
+//                                         args: [{
+//                                             r: 234 / 255,
+//                                             g: 15 / 255,
+//                                             b: 93 / 255,
+//                                         }],
+//                                     },
+//                                 ],
+//                             },
+//                             {
+//                                 texture: GeneticTexture.Y,
+//                                 args: [],
+//                             },
+//                         ],
 //                     },
 //                     {
 //                         texture: GeneticTexture.Cos,
-//                         args: [{
-//                             texture: GeneticTexture.Y,
-//                             args: [],
-//                         }],
-//                     },
+//                         args: [
+//                             {
+//                                 texture: GeneticTexture.Mult,
+//                                 args: [
+//                                     {
+//                                         texture: GeneticTexture.X,
+//                                         args: [],
+//                                     },
+//                                     {
+//                                         texture: GeneticTexture.Y,
+//                                         args: [],
+//                                     },
+//                                 ],
+//                             },
+//                         ],
+//                     }
 //                 ],
-//             },
+//             }
 //         ],
-//     }
+//     },
 // };
 
 @Component({
