@@ -179,9 +179,9 @@ function binaryElementWiseRGBViewExpression(env: Environment, left: RGBView, rig
 
             writeRGB[i32] =
                 -16777216 |
-                (Math.round(op(leftViewRead[i8], rightViewRead[i8]) * 255) << 16) |
-                (Math.round(op(leftViewRead[--i8], rightViewRead[i8]) * 255) << 8) |
-                Math.round(op(leftViewRead[--i8], rightViewRead[i8]) * 255);
+                (Math.round(op(leftViewRead[i8], rightViewRead[i8]) % 256) << 16) |
+                (Math.round(op(leftViewRead[--i8], rightViewRead[i8]) % 256) << 8) |
+                Math.round(op(leftViewRead[--i8], rightViewRead[i8]) % 256);
         }
     }
 
@@ -232,9 +232,9 @@ function binaryElementWiseRGB_BWExpression(env: Environment, left: RGBView, righ
 
             writeRGB[i32] =
                 -16777216 |
-                (Math.round(op(leftViewRead[i8], rightValue) * 255) << 16) |
-                (Math.round(op(leftViewRead[--i8], rightValue) * 255) << 8) |
-                Math.round(op(leftViewRead[--i8], rightValue) * 255);
+                (Math.round(op(leftViewRead[i8], rightValue) % 256) << 16) |
+                (Math.round(op(leftViewRead[--i8], rightValue) % 256) << 8) |
+                Math.round(op(leftViewRead[--i8], rightValue) % 256);
         }
     }
 
@@ -262,9 +262,9 @@ function binaryElementWiseBW_RGBExpression(env: Environment, left: BWView, right
 
             writeRGB[i32] =
                 -16777216 |
-                (Math.round(op(leftValue, rightViewRead[i8]) * 255) << 16) |
-                (Math.round(op(leftValue, rightViewRead[--i8]) * 255) << 8) |
-                Math.round(op(leftValue, rightViewRead[--i8]) * 255);
+                (Math.round(op(leftValue, rightViewRead[i8]) % 256) << 16) |
+                (Math.round(op(leftValue, rightViewRead[--i8]) % 256) << 8) |
+                Math.round(op(leftValue, rightViewRead[--i8]) % 256);
         }
     }
 
@@ -389,9 +389,9 @@ function unaryElementWiseRGBViewExpression(env: Environment, operand: RGBView, o
 
             writeRGB[i32] =
                 -16777216 |
-                (Math.round(op(operandViewRead[i8]) * 255) << 16) |
-                (Math.round(op(operandViewRead[--i8]) * 255) << 8) |
-                Math.round(op(operandViewRead[--i8]) * 255);
+                (Math.round(op(operandViewRead[i8]) % 256) << 16) |
+                (Math.round(op(operandViewRead[--i8]) % 256) << 8) |
+                Math.round(op(operandViewRead[--i8]) % 256);
         }
     }
 
@@ -502,7 +502,6 @@ function toRGBView(env: Environment, primary: Primary): RGBView {
 
 // xn+1 = a xn + b yn + c
 // yn+1 = d xn + e yn + f
-
 function ifs(node: Node, env: Environment): BWView {
 
     const bwView = env.newBWView();
@@ -571,66 +570,117 @@ function ifs(node: Node, env: Environment): BWView {
     return bwView;
 }
 
-function blur(node: Node, env: Environment): RGBView {
+function blur(node: Node, env: Environment): View {
 
-    const operand = evalNode(node.args[0] as Node, env);
+    const operand = wrapWithType(evalNode(node.args[0] as Node, env));
 
-    const sourceRGBView = toRGBView(env, operand);
-
-    const rgbView = env.newRGBView();
-    const writeRGB = rgbView.write;
-    let readRGB = sourceRGBView.read;
-
-    const height = env.height;
-    const width = env.width;
-
-    for (let i = 0; i < 3; i++) {
-        for (let x = 0; x < width; x++) {
-            for (let y = 0; y < height; y++) {
     
-                let r = 0;
-                let g = 0;
-                let b = 0;
-
-                let p = 0;
-    
-                for (let u = -1; u < 2; u++) {
-                    for (let v = -1; v < 2; v++) {
-                        
-                        const uvx = x + u;
-                        const uvy = y + v;
-
-                        // Could be unraveled more to handle special cases
-                        // for each corner and the sides, but perf diff is too small right now...
-                        if (uvx > -1 && uvx < width && uvy > -1 && uvy < width) {
-
-                            let uv8 = (uvy * width + uvx) * 4;
+    if (operand.type !== PrimaryType.View || (operand.value as View).type === ViewType.RGB) {
         
-                            r += readRGB[uv8];
-                            g += readRGB[++uv8];
-                            b += readRGB[++uv8];
+        const sourceRGBView = toRGBView(env, operand.value);
+    
+        const rgbView = env.newRGBView();
+        const writeRGB = rgbView.write;
+        let readRGB = sourceRGBView.read;
 
-                            p++;
+        const height = env.height;
+        const width = env.width;
+
+        for (let i = 0; i < 3; i++) {
+            for (let x = 0; x < width; x++) {
+                for (let y = 0; y < height; y++) {
+        
+                    let r = 0;
+                    let g = 0;
+                    let b = 0;
+
+                    let p = 0;
+        
+                    for (let u = -1; u < 2; u++) {
+                        for (let v = -1; v < 2; v++) {
+                            
+                            const uvx = x + u;
+                            const uvy = y + v;
+
+                            // Could be unraveled more to handle special cases
+                            // for each corner and the sides, but perf diff is too small right now...
+                            if (uvx > -1 && uvx < width && uvy > -1 && uvy < width) {
+
+                                let uv8 = (uvy * width + uvx) * 4;
+            
+                                r += readRGB[uv8];
+                                g += readRGB[++uv8];
+                                b += readRGB[++uv8];
+
+                                p++;
+                            }
                         }
                     }
+        
+                    r /= p;
+                    g /= p;
+                    b /= p;
+        
+                    writeRGB[y * width + x] =
+                        -16777216 |
+                        (Math.round(b) << 16) |
+                        (Math.round(g) << 8) |
+                        Math.round(r);
                 }
-    
-                r /= p;
-                g /= p;
-                b /= p;
-    
-                writeRGB[y * width + x] =
-                    -16777216 |
-                    (Math.round(b) << 16) |
-                    (Math.round(g) << 8) |
-                    Math.round(r);
             }
+
+            readRGB = rgbView.read;
         }
 
-        readRGB = rgbView.read;
-    }
+        return rgbView;
 
-    return rgbView;
+    } else { // BW
+
+        const bwView = env.newBWView();
+        const writeBW = bwView.write;
+        let readBW = (operand.value as BWView).read;
+
+        const height = env.height;
+        const width = env.width;
+
+        for (let i = 0; i < 3; i++) {
+            for (let x = 0; x < width; x++) {
+                for (let y = 0; y < height; y++) {
+
+                    let bw = 0;
+
+                    let p = 0;
+        
+                    for (let u = -1; u < 2; u++) {
+                        for (let v = -1; v < 2; v++) {
+                            
+                            const uvx = x + u;
+                            const uvy = y + v;
+
+                            // Could be unraveled more to handle special cases
+                            // for each corner and the sides, but perf diff is too small right now...
+                            if (uvx > -1 && uvx < width && uvy > -1 && uvy < width) {
+
+                                const uv32 = uvy * width + uvx;
+            
+                                bw += readBW[uv32];
+
+                                p++;
+                            }
+                        }
+                    }
+        
+                    bw /= p;
+        
+                    writeBW[y * width + x] = bw;
+                }
+            }
+
+            readBW = bwView.read;
+        }
+
+        return bwView;
+    }
 }
 
 function noise(node: Node, env: Environment): RGBView {
@@ -1063,12 +1113,48 @@ function getRandomTerminal(type: PrimaryType): Node {
     }
 }
 
+const rr = Math.random();
+console.log(rr)
+
 const testEvoArt: EvoArt = {
-    randomSeed: Math.random(),
+    // randomSeed: 0.10743071034134322,
+    randomSeed: 0.8749907780955624,
+    // randomSeed: rr,
     root: {
-        texture: GeneticTexture.Ifs,
-        args: [],
-    }
+        texture: GeneticTexture.Mult,
+        args: [
+            {
+                texture: GeneticTexture.Blur,
+                args: [
+                    {
+                        texture: GeneticTexture.Ifs,
+                        args: [],
+                    },
+                ],
+            },
+            {
+                texture: GeneticTexture.Grad,
+                args: [
+                    {
+                        texture: GeneticTexture.Color,
+                        args: [{
+                            r: 65 / 255,
+                            g: 126 / 255,
+                            b: 231 / 255,
+                        }],
+                    },
+                    {
+                        texture: GeneticTexture.Color,
+                        args: [{
+                            r: 234 / 255,
+                            g: 15 / 255,
+                            b: 93 / 255,
+                        }],
+                    },
+                ],
+            },
+        ],
+    },
 };
 
 // const testEvoArt: EvoArt = {
