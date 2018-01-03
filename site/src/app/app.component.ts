@@ -643,7 +643,7 @@ function blur(node: Node, env: Environment): View {
         const height = env.height;
         const width = env.width;
 
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 1; i++) {
             for (let x = 0; x < width; x++) {
                 for (let y = 0; y < height; y++) {
 
@@ -1118,8 +1118,10 @@ console.log(rr)
 
 const testEvoArt: EvoArt = {
     // randomSeed: 0.10743071034134322,
-    randomSeed: 0.8749907780955624,
-    // randomSeed: rr,
+    // randomSeed: 0.8749907780955624,
+    // randomSeed: 0.08404043122280003,
+    // randomSeed: 0.668498006670335,
+    randomSeed: rr,
     root: {
         texture: GeneticTexture.Mult,
         args: [

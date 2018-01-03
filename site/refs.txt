@@ -1,0 +1,10 @@
+https://hackernoon.com/a-note-on-numbers-in-ethereum-and-javascript-3e6ac3b2fad9
+http://www.karlsims.com/papers/siggraph91.html#Steele
+https://www.cs.rit.edu/~jmg/courses/cgII/20063/slides/5-1-procshade.pdf
+https://ethereum.stackexchange.com/questions/191/how-can-i-securely-generate-a-random-number-in-my-smart-contract
+https://remix.ethereum.org/#optimize=false&version=soljson-v0.4.19+commit.c4cbbb05.js
+http://solidity.readthedocs.io/en/develop/units-and-global-variables.html
+http://solidity.readthedocs.io/en/latest/types.html#structs
+https://hacks.mozilla.org/2011/12/faster-canvas-pixel-manipulation-with-typed-arrays/
+http://paulbourke.net/fractals/ifs/
+http://cs.lmu.edu/~ray/notes/ifs/
