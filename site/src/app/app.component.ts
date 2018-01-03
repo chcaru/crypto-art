@@ -514,7 +514,7 @@ function ifs(node: Node, env: Environment): BWView {
 
     let ifsSets: number[][];
 
-    const n = Math.round(env.getRandom() * 6);
+    const n = 2 + Math.round(env.getRandom() * 3);
 
     let isContractive = false;
 
@@ -524,7 +524,7 @@ function ifs(node: Node, env: Environment): BWView {
         ifsSets = [];
 
         for (let i = 0; i < n; i++) {
-
+            
             const set = [
                 env.getRandom() * 2 - 1,
                 env.getRandom() * 2 - 1,
@@ -549,29 +549,24 @@ function ifs(node: Node, env: Environment): BWView {
         isContractive = contractive;
     }
 
-    const a = []
-
     let x = 0;
     let y = 0;
 
-    for (let i = 0; i < 1000000; i++) {
+    const iterations = readBW.length;
+    for (let i = 0; i < iterations; i++) {
 
-        for (let si = 0; si < n; si++) {
+        const si = Math.floor(env.getRandom() * n)
+        const ifsSet = ifsSets[si];
+        const xo = x;
 
-            const ifsSet = ifsSets[si];
-            const xo = x;
-
-            x = ifsSet[0] * xo + ifsSet[1] * y + ifsSet[2];
-            y = ifsSet[3] * xo + ifsSet[4] * y + ifsSet[5];
-        }
+        x = ifsSet[0] * xo + ifsSet[1] * y + ifsSet[2];
+        y = ifsSet[3] * xo + ifsSet[4] * y + ifsSet[5];
 
         const xx = Math.round((x + 1) / 2 * width);
         const yy = Math.round((y + 1) / 2 * height);
-        a.push([xx, yy])
         
         writeBW[yy * width + xx] = 1.0;
     }
-    console.log(a)
 
     return bwView;
 }
@@ -1069,7 +1064,7 @@ function getRandomTerminal(type: PrimaryType): Node {
 }
 
 const testEvoArt: EvoArt = {
-    randomSeed: 51337,
+    randomSeed: Math.random(),
     root: {
         texture: GeneticTexture.Ifs,
         args: [],
