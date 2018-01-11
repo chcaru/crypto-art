@@ -360,7 +360,7 @@ function binaryElementWiseExpression(node: Node, env: Environment, ops: BinaryOp
             let leftValue: View;
             let rightValue: View;
 
-            if (left.type !== PrimaryType.Color) {
+            if (left.type !== PrimaryType.View) {
 
                 leftValue = colorToView(env, toColor(left.value as number));
                 rightValue = right.value as View;
@@ -507,6 +507,10 @@ function toRGBView(env: Environment, primary: Primary): RGBView {
         }
     }
 }
+
+// function fxaa(node: Node, env: Environment): RGBView {
+//     // http://blog.simonrodriguez.fr/articles/30-07-2016_implementing_fxaa.html
+// }
 
 // xn+1 = a xn + b yn + c
 // yn+1 = d xn + e yn + f
@@ -1119,12 +1123,13 @@ const geneticTextureDef = {
     12: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
     13: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
     // 14: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Number },
-    15: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Color },
+    15: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
     16: { args: [PrimaryType.Any], return: PrimaryType.Any },
     17: { args: [PrimaryType.Any], return: PrimaryType.Any },
-    18: { args: [], return: PrimaryType.Color },
-    19: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Color },
-    23: { args: [PrimaryType.Color], return: PrimaryType.Color },
+    18: { args: [], return: PrimaryType.View },
+    19: { args: [PrimaryType.Color, PrimaryType.Color], return: PrimaryType.View },
+    20: { args: [PrimaryType.View], return: PrimaryType.View },
+    23: { args: [PrimaryType.View], return: PrimaryType.View },
     24: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
     28: { args: [], return: PrimaryType.View }
 };
@@ -1235,7 +1240,7 @@ function generateRandomEvoArt(maxDepth: number): EvoArt {
     };
 }
 
-function getRandomNode(maxDepth: number, returns: PrimaryType = PrimaryType.Any, depth = 0): Node {
+function getRandomNode(maxDepth: number, returns: PrimaryType = PrimaryType.View, depth = 0): Node {
 
     if (depth >= maxDepth - 1) {
         return getRandomTerminal(returns);
@@ -1253,7 +1258,7 @@ function getRandomNode(maxDepth: number, returns: PrimaryType = PrimaryType.Any,
 }
 
 function convertAnysToTypes(args: PrimaryType[], returns: PrimaryType): PrimaryType[] {
-    
+
     if (args.length === 0) {
 
         return [];
@@ -1263,36 +1268,61 @@ function convertAnysToTypes(args: PrimaryType[], returns: PrimaryType): PrimaryT
         return args.slice();
 
     } else if (returns === PrimaryType.Number) {
-        
+
         return new Array(args.length).fill(PrimaryType.Number);
 
     } else if (returns === PrimaryType.Color) {
 
         let randomizedArgs = args.slice();
-        
+
         while (!randomizedArgs.some(a => a === PrimaryType.Color)) {
 
             randomizedArgs = args
-                .map(a => 
+                .map(a =>
                     a === PrimaryType.Any
-                        ? Math.random() >= .5
-                            ? PrimaryType.Color
-                            : PrimaryType.Number
+                        ? getRandomType()
                         : a
                 );
         }
 
         return randomizedArgs;
 
-    } else { // Either type works
+    } else if (returns === PrimaryType.View) {
 
-        return args.map(a => 
+        let randomizedArgs = args.slice();
+
+        while (!randomizedArgs.some(a => a === PrimaryType.View)) {
+
+            randomizedArgs = args
+                .map(a =>
+                    a === PrimaryType.Any
+                        ? getRandomType()
+                        : a
+                );
+        }
+
+        return randomizedArgs;
+
+    } else { // Any type works
+
+        return args.map(a =>
             a === PrimaryType.Any
-                ? Math.random() >= .5
-                    ? PrimaryType.Color
-                    : PrimaryType.Number
+                ? getRandomType()
                 : a
         );
+    }
+}
+
+function getRandomType(): PrimaryType {
+
+    const rand = Math.random();
+
+    if (rand <= .33) {
+        return PrimaryType.Color;
+    } else if (rand <= .66) {
+        return PrimaryType.Number;
+    } else {
+        return PrimaryType.View;
     }
 }
 
@@ -1348,6 +1378,9 @@ const testEvoArt: EvoArt = {
     // randomSeed: 0.8115653593629433,
     // randomSeed: 0.04641879573128804,
     // randomSeed: 0.23501154853922235,
+    // randomSeed: 0.0011663862123056923,
+    // randomSeed: 0.13245597201370352,
+    // randomSeed: 0.9496387914608209,
     randomSeed: rr,
     root: {
         texture: GeneticTexture.Mult,
@@ -1385,6 +1418,19 @@ const testEvoArt: EvoArt = {
         ],
     },
 };
+
+// {
+//     "randomSeed": 0.6571947488756478,
+//     "root": {
+//       "texture": 23,
+//       "args": [
+//         {
+//           "texture": 28,
+//           "args": []
+//         }
+//       ]
+//     }
+//   }
 
 // const testEvoArt: EvoArt = {
 //     randomSeed: 1337,
@@ -1476,7 +1522,7 @@ export class AppComponent {
 
         const context = this.canvas.nativeElement.getContext('2d') as CanvasRenderingContext2D;
 
-        const randomEvoArt = generateRandomEvoArt(3);
+        const randomEvoArt = generateRandomEvoArt(4);
 
         renderEvoArt(context, randomEvoArt, 1080, 1080);
 
