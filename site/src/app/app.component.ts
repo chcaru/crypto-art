@@ -136,19 +136,7 @@ function toColor(primary: number | Color): Color {
     });
 }
 
-function binaryColorExpression(node: Node, env: Environment, op: (left: Color, right: Color) => Primary) {
-
-    const left = toColor(evalNode(node.args[0] as Node, env) as number | Color);
-    const right = toColor(evalNode(node.args[1] as Node, env) as number | Color);
-
-    const result = wrapWithType(op(left, right));
-
-    return result.type === PrimaryType.Color 
-        ? bindColor(result.value as Color) 
-        : result.value;
-}
-
-function binaryElementWiseRGBViewExpression(env: Environment, left: RGBView, right: RGBView, op: (left: number, right: number) => number) {
+function binaryElementWiseRGBViewExpression(env: Environment, left: RGBView, right: RGBView, ops: BinaryOperations) {
 
     const rgbView = env.newRGBView();
     const writeRGB = rgbView.write;
@@ -158,6 +146,8 @@ function binaryElementWiseRGBViewExpression(env: Environment, left: RGBView, rig
 
     const leftViewRead = left.read;
     const rightViewRead = right.read;
+
+    const rgb = ops.rgb;
     
     for (let x = 0; x < width; x++) {
         for (let y = 0; y < height; y++) {
@@ -177,18 +167,20 @@ function binaryElementWiseRGBViewExpression(env: Environment, left: RGBView, rig
             // leftViewRead[--i8]
             // rightViewRead[i8]
 
-            writeRGB[i32] =
-                -16777216 |
-                (Math.round(op(leftViewRead[i8], rightViewRead[i8]) % 256) << 16) |
-                (Math.round(op(leftViewRead[--i8], rightViewRead[i8]) % 256) << 8) |
-                Math.round(op(leftViewRead[--i8], rightViewRead[i8]) % 256);
+            // writeRGB[i32] =
+            //     -16777216 |
+            //     (Math.round(op(leftViewRead[i8], rightViewRead[i8]) % 256) << 16) |
+            //     (Math.round(op(leftViewRead[--i8], rightViewRead[i8]) % 256) << 8) |
+            //     Math.round(op(leftViewRead[--i8], rightViewRead[i8]) % 256);
+
+            writeRGB[i32] = rgb(i8, leftViewRead, rightViewRead);
         }
     }
 
     return rgbView;
 }
 
-function binaryElementWiseBWViewExpression(env: Environment, left: BWView, right: BWView, op: (left: number, right: number) => number) {
+function binaryElementWiseBWViewExpression(env: Environment, left: BWView, right: BWView, ops: BinaryOperations) {
 
     const bwView = env.newBWView();
     const writeBW = bwView.write;
@@ -198,20 +190,24 @@ function binaryElementWiseBWViewExpression(env: Environment, left: BWView, right
 
     const leftViewRead = left.read;
     const rightViewRead = right.read;
-    
+
+    const bw = ops.bw;
+
     for (let x = 0; x < width; x++) {
         for (let y = 0; y < height; y++) {
 
             const i = y * width + x;
 
-            writeBW[i] = op(leftViewRead[i], rightViewRead[i]);
+            // writeBW[i] = op(leftViewRead[i], rightViewRead[i]);
+
+            writeBW[i] = bw(leftViewRead[i], rightViewRead[i]);
         }
     }
 
     return bwView;
 }
 
-function binaryElementWiseRGB_BWExpression(env: Environment, left: RGBView, right: BWView, op: (left: number, right: number) => number) {
+function binaryElementWiseRGB_BWExpression(env: Environment, left: RGBView, right: BWView, ops: BinaryOperations) {
 
     const rgbView = env.newRGBView();
     const writeRGB = rgbView.write;
@@ -221,7 +217,9 @@ function binaryElementWiseRGB_BWExpression(env: Environment, left: RGBView, righ
 
     const leftViewRead = left.read;
     const rightViewRead = right.read;
-    
+
+    const rgb_bw = ops.rgb_bw;
+
     for (let x = 0; x < width; x++) {
         for (let y = 0; y < height; y++) {
 
@@ -230,18 +228,20 @@ function binaryElementWiseRGB_BWExpression(env: Environment, left: RGBView, righ
 
             const rightValue = rightViewRead[i32];
 
-            writeRGB[i32] =
-                -16777216 |
-                (Math.round(op(leftViewRead[i8], rightValue) % 256) << 16) |
-                (Math.round(op(leftViewRead[--i8], rightValue) % 256) << 8) |
-                Math.round(op(leftViewRead[--i8], rightValue) % 256);
+            // writeRGB[i32] =
+                // -16777216 |
+                // (Math.round(op(leftViewRead[i8], rightValue) % 256) << 16) |
+                // (Math.round(op(leftViewRead[--i8], rightValue) % 256) << 8) |
+                // Math.round(op(leftViewRead[--i8], rightValue) % 256);
+
+            writeRGB[i32] = rgb_bw(i8, leftViewRead, rightValue);
         }
     }
 
     return rgbView;
 }
 
-function binaryElementWiseBW_RGBExpression(env: Environment, left: BWView, right: RGBView, op: (left: number, right: number) => number) {
+function binaryElementWiseBW_RGBExpression(env: Environment, left: BWView, right: RGBView, ops: BinaryOperations) {
 
     const rgbView = env.newRGBView();
     const writeRGB = rgbView.write;
@@ -252,6 +252,8 @@ function binaryElementWiseBW_RGBExpression(env: Environment, left: BWView, right
     const leftViewRead = left.read;
     const rightViewRead = right.read;
     
+    const bw_rgb = ops.bw_rgb;
+
     for (let x = 0; x < width; x++) {
         for (let y = 0; y < height; y++) {
 
@@ -260,44 +262,55 @@ function binaryElementWiseBW_RGBExpression(env: Environment, left: BWView, right
 
             const leftValue = leftViewRead[i32];
 
-            writeRGB[i32] =
-                -16777216 |
-                (Math.round(op(leftValue, rightViewRead[i8]) % 256) << 16) |
-                (Math.round(op(leftValue, rightViewRead[--i8]) % 256) << 8) |
-                Math.round(op(leftValue, rightViewRead[--i8]) % 256);
+            // writeRGB[i32] =
+            //     -16777216 |
+            //     (Math.round(op(leftValue, rightViewRead[i8]) % 256) << 16) |
+            //     (Math.round(op(leftValue, rightViewRead[--i8]) % 256) << 8) |
+            //     Math.round(op(leftValue, rightViewRead[--i8]) % 256);
+
+            writeRGB[i32] = bw_rgb(leftValue, i8, rightViewRead);
         }
     }
 
     return rgbView;
 }
 
-function binaryElementWiseViewExpression(env: Environment, left: View, right: View, op: (left: number, right: number) => number) {
+function binaryElementWiseViewExpression(env: Environment, left: View, right: View, ops: BinaryOperations) {
 
     if (left.type === right.type) {
 
         if (left.type === ViewType.RGB) {
-        
-            return binaryElementWiseRGBViewExpression(env, left, right as RGBView, op);
+
+            return binaryElementWiseRGBViewExpression(env, left, right as RGBView, ops);
 
         } else { // BWView
 
-            return binaryElementWiseBWViewExpression(env, left, right as BWView, op);
+            return binaryElementWiseBWViewExpression(env, left, right as BWView, ops);
         }
 
     } else { // Different ViewTypes
 
         if (left.type === ViewType.RGB) { // left: RGB, right: BW
-        
-            return binaryElementWiseRGB_BWExpression(env, left, right as BWView, op);
+
+            return binaryElementWiseRGB_BWExpression(env, left, right as BWView, ops);
 
         } else { // left: BW, right: RGB
 
-            return binaryElementWiseBW_RGBExpression(env, left, right as RGBView, op);
+            return binaryElementWiseBW_RGBExpression(env, left, right as RGBView, ops);
         }
     }
 }
 
-function binaryElementWiseExpression(node: Node, env: Environment, op: (left: number, right: number) => number) {
+interface BinaryOperations {
+    bw_rgb(left: number, rightOffset: number, right: Uint8ClampedArray): number;
+    bw(left: number, right: number): number;
+    color(left: Color, right: Color): Primary;
+    number(left: number, right: number): Primary;
+    rgb_bw(leftOffset: number, left: Uint8ClampedArray, right: number): number;
+    rgb(offset: number, left: Uint8ClampedArray, right: Uint8ClampedArray): number;
+}
+
+function binaryElementWiseExpression(node: Node, env: Environment, ops: BinaryOperations) {
 
     const left = wrapWithType(evalNode(node.args[0] as Node, env));
     const right = wrapWithType(evalNode(node.args[1] as Node, env));
@@ -306,22 +319,18 @@ function binaryElementWiseExpression(node: Node, env: Environment, op: (left: nu
 
         if (left.type === PrimaryType.Number) {
 
-            return op((left.value as number), (right.value as number));
+            return ops.number((left.value as number), (right.value as number));
 
         } else if (left.type === PrimaryType.Color) {
 
             const leftValue = left.value as Color;
             const rightValue = right.value as Color;
-            
-            return bindColor({
-                r: op(leftValue.r, rightValue.r),
-                g: op(leftValue.g, rightValue.g),
-                b: op(leftValue.b, rightValue.b),
-            });
+
+            return ops.color(leftValue, rightValue);
 
         } else if (left.type === PrimaryType.View) {
 
-            return binaryElementWiseViewExpression(env, left.value as View, right.value as View, op);
+            return binaryElementWiseViewExpression(env, left.value as View, right.value as View, ops);
         }
 
     } else {
@@ -344,11 +353,7 @@ function binaryElementWiseExpression(node: Node, env: Environment, op: (left: nu
                 rightValue = toColor(right.value as number);
             }
 
-            return bindColor({
-                r: op(leftValue.r, rightValue.r),
-                g: op(leftValue.g, rightValue.g),
-                b: op(leftValue.b, rightValue.b),
-            });
+            return ops.color(leftValue, rightValue);
 
         } else if (coerceToType === PrimaryType.View) {
 
@@ -366,12 +371,12 @@ function binaryElementWiseExpression(node: Node, env: Environment, op: (left: nu
                 rightValue = colorToView(env, toColor(right.value as number));
             }
 
-            return binaryElementWiseViewExpression(env, leftValue, rightValue, op);
+            return binaryElementWiseViewExpression(env, leftValue, rightValue, ops);
         }
     }
 }
 
-function unaryElementWiseRGBViewExpression(env: Environment, operand: RGBView, op: (left: number) => number) {
+function unaryElementWiseRGBViewExpression(env: Environment, operand: RGBView, ops: UnaryOperations) {
 
     const rgbView = env.newRGBView();
     const writeRGB = rgbView.write;
@@ -380,6 +385,8 @@ function unaryElementWiseRGBViewExpression(env: Environment, operand: RGBView, o
     const width = env.width;
 
     const operandViewRead = operand.read;
+
+    const rgb = ops.rgb;
     
     for (let x = 0; x < width; x++) {
         for (let y = 0; y < height; y++) {
@@ -387,18 +394,20 @@ function unaryElementWiseRGBViewExpression(env: Environment, operand: RGBView, o
             const i32 = y * width + x;
             let i8 = i32 * 4 + 2;
 
-            writeRGB[i32] =
-                -16777216 |
-                (Math.round(op(operandViewRead[i8]) % 256) << 16) |
-                (Math.round(op(operandViewRead[--i8]) % 256) << 8) |
-                Math.round(op(operandViewRead[--i8]) % 256);
+            // writeRGB[i32] =
+                // -16777216 |
+                // (Math.round(op(operandViewRead[i8]) % 256) << 16) |
+                // (Math.round(op(operandViewRead[--i8]) % 256) << 8) |
+                // Math.round(op(operandViewRead[--i8]) % 256);
+
+            writeRGB[i32] = rgb(i8, operandViewRead);
         }
     }
 
     return rgbView;
 }
 
-function unaryElementWiseBWViewExpression(env: Environment, operand: BWView, op: (left: number) => number) {
+function unaryElementWiseBWViewExpression(env: Environment, operand: BWView, ops: UnaryOperations) {
 
     const bwView = env.newBWView();
     const writeBW = bwView.write;
@@ -407,36 +416,39 @@ function unaryElementWiseBWViewExpression(env: Environment, operand: BWView, op:
     const width = env.width;
 
     const operandViewRead = operand.read;
-    
+
+    const bw = ops.bw;
+
     for (let x = 0; x < width; x++) {
         for (let y = 0; y < height; y++) {
 
             const i = y * width + x;
 
-            writeBW[i] = op(operandViewRead[i]);
+            writeBW[i] = bw(operandViewRead[i]);
         }
     }
 
     return bwView;
 }
 
-function unaryExpression(node: Node, env: Environment, op: (operand: number) => number) {
+interface UnaryOperations {
+    bw(operand: number): number;
+    color(operand: Color): Primary;
+    number(operand: number): Primary;
+    rgb(offset: number, operand: Uint8ClampedArray): number;
+}
+
+function unaryExpression(node: Node, env: Environment, ops: UnaryOperations) {
     
     const operand = wrapWithType(evalNode(node.args[0] as Node, env));
 
     if (operand.type === PrimaryType.Number) {
 
-        return op(operand.value as number);
+        return ops.number(operand.value as number);
 
     } else if (operand.type === PrimaryType.Color) {
 
-        const color = operand.value as Color;
-
-        return bindColor({
-            r: op(color.r),
-            g: op(color.g),
-            b: op(color.b),
-        });
+        return ops.color(operand.value as Color);
 
     } else { // View
 
@@ -444,11 +456,11 @@ function unaryExpression(node: Node, env: Environment, op: (operand: number) => 
 
         if (operandValue.type === ViewType.RGB) {
 
-            return unaryElementWiseRGBViewExpression(env, operandValue, op);
+            return unaryElementWiseRGBViewExpression(env, operandValue, ops);
 
         } else { // BW
 
-            return unaryElementWiseBWViewExpression(env, operandValue, op);
+            return unaryElementWiseBWViewExpression(env, operandValue, ops);
         }
     }
 }
@@ -461,16 +473,12 @@ function colorToView(env: Environment, { r, g, b }: Color): RGBView {
     const height = env.height;
     const width = env.width;
 
-    for (let x = 0; x < width; x++) {
-        for (let y = 0; y < height; y++) {
+    const color = -16777216 |
+        ((b % 256) << 16) |
+        ((g % 256) << 8) |
+        (r % 256);
 
-            writeRGB[y * width + x] =
-                -16777216 |
-                ((b % 256) << 16) |
-                ((g % 256) << 8) |
-                (r % 256);
-        }
-    }
+    writeRGB.fill(color);
 
     return rgbView;
 }
@@ -551,7 +559,7 @@ function ifs(node: Node, env: Environment): BWView {
     let x = 0;
     let y = 0;
 
-    const iterations = readBW.length;
+    const iterations = readBW.length / 10;
     for (let i = 0; i < iterations; i++) {
 
         const si = Math.floor(env.getRandom() * n)
@@ -586,7 +594,7 @@ function blur(node: Node, env: Environment): View {
         const height = env.height;
         const width = env.width;
 
-        for (let i = 0; i < 3; i++) {
+        for (let i = 0; i < 1; i++) {
             for (let x = 0; x < width; x++) {
                 for (let y = 0; y < height; y++) {
         
@@ -734,7 +742,6 @@ function grad(node: Node, env: Environment): RGBView {
     return rgbView;
 }
 
-// TODO: Fix, this is just broken
 function hsvToRGB(node: Node, env: Environment): RGBView {
 
     const rgbView = env.newRGBView();
@@ -743,16 +750,20 @@ function hsvToRGB(node: Node, env: Environment): RGBView {
     const height = env.height;
     const width = env.width;
 
-    const color = toColor(evalNode(node.args[0] as Node, env) as number | Color);
+    const operand = toRGBView(env, evalNode(node.args[0] as Node, env));
+    const readRGB = operand.read;
 
-    const h = color.r;
-    const s = color.g;
-    const v = color.b;
-
-    let r, g, b, i, f, p, q, t;
+    let r, g, b, i, f, p, q, t, h, s, v;
 
     for (let x = 0; x < width; x++) {
         for (let y = 0; y < height; y++) {
+
+            const i32 = y * width + x;
+            let i8 = i32 * 4;
+
+            h = readRGB[i8];
+            s = readRGB[++i8];
+            v = readRGB[++i8];
 
             i = Math.floor(h * 6);
             f = h * 6 - i;
@@ -768,7 +779,7 @@ function hsvToRGB(node: Node, env: Environment): RGBView {
                 case 5: r = v, g = p, b = q; break;
             }
 
-            writeRGB[y * width + x] =
+            writeRGB[i32] =
                 -16777216 |
                 (Math.round(b * 255) << 16) |
                 (Math.round(g * 255) << 8) |
@@ -825,40 +836,276 @@ function y(env: Environment): BWView {
     return bwView;
 }
 
+const add: BinaryOperations = {
+    bw_rgb: (l, ro, r) => -16777216 |
+        ((Math.round(l + r[ro]) % 256) << 16) |
+        ((Math.round(l + r[--ro]) % 256) << 8) |
+        (Math.round(l + r[--ro]) % 256),
+    bw: (l, r) => l + r,
+    color: (l, r) => ({ r: (l.r + r.r) % 256, g: (l.g + r.g) % 256, b: (l.b + r.b) % 256 }),
+    number: (l, r) => l + r,
+    rgb_bw: (lo, l, r) => -16777216 |
+        ((Math.round(l[lo] + r) % 256) << 16) |
+        ((Math.round(l[--lo] + r) % 256) << 8) |
+        (Math.round(l[--lo] + r) % 256),
+    rgb: (o, l, r) => -16777216 |
+        ((Math.round(l[o] + r[o]) % 256) << 16) |
+        ((Math.round(l[--o] + r[o]) % 256) << 8) |
+        (Math.round(l[--o] + r[o]) % 256),
+};
+
+const sub: BinaryOperations = {
+    bw_rgb: (l, ro, r) => -16777216 |
+        ((Math.round(l - r[ro]) % 256) << 16) |
+        ((Math.round(l - r[--ro]) % 256) << 8) |
+        (Math.round(l - r[--ro]) % 256),
+    bw: (l, r) => l - r,
+    color: (l, r) => ({ r: (l.r - r.r) % 256, g: (l.g - r.g) % 256, b: (l.b - r.b) % 256 }),
+    number: (l, r) => l - r,
+    rgb_bw: (lo, l, r) => -16777216 |
+        ((Math.round(l[lo] - r) % 256) << 16) |
+        ((Math.round(l[--lo] - r) % 256) << 8) |
+        (Math.round(l[--lo] - r) % 256),
+    rgb: (o, l, r) => -16777216 |
+        ((Math.round(l[o] - r[o]) % 256) << 16) |
+        ((Math.round(l[--o] - r[o]) % 256) << 8) |
+        (Math.round(l[--o] - r[o]) % 256),
+};
+
+const mult: BinaryOperations = {
+    bw_rgb: (l, ro, r) => -16777216 |
+        ((Math.round(l * r[ro]) % 256) << 16) |
+        ((Math.round(l * r[--ro]) % 256) << 8) |
+        (Math.round(l * r[--ro]) % 256),
+    bw: (l, r) => l * r,
+    color: (l, r) => ({ r: (l.r * r.r) % 256, g: (l.g * r.g) % 256, b: (l.b * r.b) % 256 }),
+    number: (l, r) => l * r,
+    rgb_bw: (lo, l, r) => -16777216 |
+        ((Math.round(l[lo] * r) % 256) << 16) |
+        ((Math.round(l[--lo] * r) % 256) << 8) |
+        (Math.round(l[--lo] * r) % 256),
+    rgb: (o, l, r) => -16777216 |
+        ((Math.round(l[o] * r[o]) % 256) << 16) |
+        ((Math.round(l[--o] * r[o]) % 256) << 8) |
+        (Math.round(l[--o] * r[o]) % 256),
+};
+
+const div: BinaryOperations = {
+    bw_rgb: (l, ro, r) => -16777216 |
+        ((Math.round(l / r[ro]) % 256) << 16) |
+        ((Math.round(l / r[--ro]) % 256) << 8) |
+        (Math.round(l / r[--ro]) % 256),
+    bw: (l, r) => l / r,
+    color: (l, r) => ({ r: (l.r / r.r) % 256, g: (l.g / r.g) % 256, b: (l.b / r.b) % 256 }),
+    number: (l, r) => l / r,
+    rgb_bw: (lo, l, r) => -16777216 |
+        ((Math.round(l[lo] / r) % 256) << 16) |
+        ((Math.round(l[--lo] / r) % 256) << 8) |
+        (Math.round(l[--lo] / r) % 256),
+    rgb: (o, l, r) => -16777216 |
+        ((Math.round(l[o] / r[o]) % 256) << 16) |
+        ((Math.round(l[--o] / r[o]) % 256) << 8) |
+        (Math.round(l[--o] / r[o]) % 256),
+};
+
+const pow: BinaryOperations = {
+    bw_rgb: (l, ro, r) => -16777216 |
+        ((Math.round(Math.pow(l, r[ro])) % 256) << 16) |
+        ((Math.round(Math.pow(l, r[--ro])) % 256) << 8) |
+        (Math.round(Math.pow(l, r[--ro])) % 256),
+    bw: (l, r) => Math.pow(l, r),
+    color: (l, r) => ({ r: Math.pow(l.r, r.r) % 256, g: Math.pow(l.g, r.g) % 256, b: Math.pow(l.b, r.b) % 256 }),
+    number: (l, r) => Math.pow(l, r),
+    rgb_bw: (lo, l, r) => -16777216 |
+        ((Math.round(Math.pow(l[lo], r)) % 256) << 16) |
+        ((Math.round(Math.pow(l[--lo], r)) % 256) << 8) |
+        (Math.round(Math.pow(l[--lo], r)) % 256),
+    rgb: (o, l, r) => -16777216 |
+        ((Math.round(Math.pow(l[o], r[o])) % 256) << 16) |
+        ((Math.round(Math.pow(l[--o], r[o])) % 256) << 8) |
+        (Math.round(Math.pow(l[--o], r[o])) % 256),
+};
+
+const min: BinaryOperations = {
+    bw_rgb: (l, ro, r) => -16777216 |
+        ((Math.round(Math.min(l, r[ro])) % 256) << 16) |
+        ((Math.round(Math.min(l, r[--ro])) % 256) << 8) |
+        (Math.round(Math.min(l / r[--ro])) % 256),
+    bw: (l, r) => Math.min(l, r),
+    color: (l, r) => ({ r: Math.min(l.r, r.r) % 256, g: Math.min(l.g, r.g) % 256, b: Math.min(l.b, r.b) % 256 }),
+    number: (l, r) => Math.min(l, r),
+    rgb_bw: (lo, l, r) => -16777216 |
+        ((Math.round(Math.min(l[lo], r)) % 256) << 16) |
+        ((Math.round(Math.min(l[--lo], r)) % 256) << 8) |
+        (Math.round(Math.min(l[--lo], r)) % 256),
+    rgb: (o, l, r) => -16777216 |
+        ((Math.round(Math.min(l[o], r[o])) % 256) << 16) |
+        ((Math.round(Math.min(l[--o], r[o])) % 256) << 8) |
+        (Math.round(Math.min(l[--o], r[o])) % 256),
+};
+
+const max: BinaryOperations = {
+    bw_rgb: (l, ro, r) => -16777216 |
+        ((Math.round(Math.max(l, r[ro])) % 256) << 16) |
+        ((Math.round(Math.max(l, r[--ro])) % 256) << 8) |
+        (Math.round(Math.max(l / r[--ro])) % 256),
+    bw: (l, r) => Math.max(l, r),
+    color: (l, r) => ({ r: Math.max(l.r, r.r) % 256, g: Math.max(l.g, r.g) % 256, b: Math.max(l.b, r.b) % 256 }),
+    number: (l, r) => Math.max(l, r),
+    rgb_bw: (lo, l, r) => -16777216 |
+        ((Math.round(Math.max(l[lo], r)) % 256) << 16) |
+        ((Math.round(Math.max(l[--lo], r)) % 256) << 8) |
+        (Math.round(Math.max(l[--lo], r)) % 256),
+    rgb: (o, l, r) => -16777216 |
+        ((Math.round(Math.max(l[o], r[o])) % 256) << 16) |
+        ((Math.round(Math.max(l[--o], r[o])) % 256) << 8) |
+        (Math.round(Math.max(l[--o], r[o])) % 256),
+};
+
+const mod: BinaryOperations = {
+    bw_rgb: (l, ro, r) => -16777216 |
+        ((Math.round(l % r[ro]) % 256) << 16) |
+        ((Math.round(l % r[--ro]) % 256) << 8) |
+        (Math.round(l % r[--ro]) % 256),
+    bw: (l, r) => l % r,
+    color: (l, r) => ({ r: (l.r % r.r) % 256, g: (l.g % r.g) % 256, b: (l.b % r.b) % 256 }),
+    number: (l, r) => l % r,
+    rgb_bw: (lo, l, r) => -16777216 |
+        ((Math.round(l[lo] % r) % 256) << 16) |
+        ((Math.round(l[--lo] % r) % 256) << 8) |
+        (Math.round(l[--lo] % r) % 256),
+    rgb: (o, l, r) => -16777216 |
+        ((Math.round(l[o] % r[o]) % 256) << 16) |
+        ((Math.round(l[--o] % r[o]) % 256) << 8) |
+        (Math.round(l[--o] % r[o]) % 256),
+};
+
+const cross: BinaryOperations = {
+    bw_rgb: (l, ro, r) => {
+
+        const rB = r[ro];
+        const rG = r[--ro];
+        const rR = r[--ro];
+
+        return -16777216 |
+            ((Math.round(l * rG - l * rR) % 256) << 16) |
+            ((Math.round(l * rR - l * rB) % 256) << 8) |
+            (Math.round(l * rB - l * rG) % 256);
+    },
+    bw: (l, r) => 0,
+    color: (l, r) => ({
+        r: (l.g * r.b - l.b * r.g) % 256,
+        g: (l.b * r.r - l.r * r.b) % 256,
+        b: (l.r * r.g - l.g * r.r) % 256,
+     }),
+    number: (l, r) => 0,
+    rgb_bw: (lo, l, r) => {
+
+        const lB = l[lo];
+        const lG = l[--lo];
+        const lR = l[--lo];
+
+        return -16777216 |
+            ((Math.round(lG * r - lB * r) % 256) << 16) |
+            ((Math.round(lB * r - lR * r) % 256) << 8) |
+            (Math.round(lR * r - lG * r) % 256);
+    },
+    rgb: (o, l, r) => {
+
+        const lB = l[o];
+        const rB = r[o];
+        const lG = l[--o];
+        const rG = r[o];
+        const lR = l[--o];
+        const rR = r[o];
+
+        return -16777216 |
+            ((Math.round(lG * rG - lB * rR) % 256) << 16) |
+            ((Math.round(lB * rR - lR * rB) % 256) << 8) |
+            (Math.round(lR * rB - lG * rG) % 256);
+    },
+};
+
+const cos: UnaryOperations = {
+    bw: op => Math.cos(op),
+    color: op => ({ r: (Math.cos(op.r) + 1) / 2 * 255, g: (Math.cos(op.g) + 1) / 2 * 255, b: (Math.cos(op.b) + 1) / 2 * 255 }),
+    number: op => Math.cos(op),
+    rgb: (o, op) => -16777216 |
+        (Math.round((Math.cos(op[o]) + 1) / 2 * 255) << 16) |
+        (Math.round((Math.cos(op[--o]) + 1) / 2 * 255) << 8) |
+        Math.round((Math.cos(op[--o]) + 1) / 2 * 255),
+};
+
+const sin: UnaryOperations = {
+    bw: op => Math.sin(op),
+    color: op => ({ r: (Math.sin(op.r) + 1) / 2 * 255, g: (Math.sin(op.g) + 1) / 2 * 255, b: (Math.sin(op.b) + 1) / 2 * 255 }),
+    number: op => Math.sin(op),
+    rgb: (o, op) => -16777216 |
+        (Math.round((Math.sin(op[o]) + 1) / 2 * 255) << 16) |
+        (Math.round((Math.sin(op[--o]) + 1) / 2 * 255) << 8) |
+        Math.round((Math.sin(op[--o]) + 1) / 2 * 255),
+};
+
+const log: UnaryOperations = {
+    bw: op => op !== 0 ? Math.log(op) : 0,
+    color: op => ({ r: (op.r !== 0 ? Math.log(op.r) : 0) % 255, g: (op.g !== 0 ? Math.log(op.g) : 0) % 255, b: (op.b !== 0 ? Math.log(op.b) : 0) % 255 }),
+    number: op => op !== 0 ? Math.log(op) : 0,
+    rgb: (o, op) => -16777216 |
+        (Math.round((op[o] !== 0 ? Math.log(op[o]) : 0) % 256) << 16) |
+        (Math.round((op[--o] !== 0 ? Math.log(op[o]) : 0) % 256) << 8) |
+        Math.round((op[--o] !== 0 ? Math.log(op[o]) : 0) % 256),
+};
+
+const round: UnaryOperations = {
+    bw: op => Math.round(op),
+    color: op => ({ r: Math.round(op.r), g: Math.round(op.r), b: Math.round(op.b) }),
+    number: op => Math.round(op),
+    rgb: (o, op) => -16777216 |
+        (Math.round(op[o]) << 16) |
+        (Math.round(op[--o]) << 8) |
+        Math.round(op[--o]),
+};
+
+const abs: UnaryOperations = {
+    bw: op => Math.abs(op),
+    color: op => ({ r: Math.abs(op.r), g: Math.abs(op.r), b: Math.abs(op.b) }),
+    number: op => Math.abs(op),
+    rgb: (o, op) => -16777216 |
+        (Math.abs(op[o]) << 16) |
+        (Math.abs(op[--o]) << 8) |
+        Math.abs(op[--o]),
+};
+
 const geneticTextureEval = {
     0: (node, env) => x(env),
     1: (node, env) => y(env),
     2: node => node.args[0],
     3: node => node.args[0],
-    4: (node, env) => binaryElementWiseExpression(node, env, (l, r) => l + r),
-    5: (node, env) => binaryElementWiseExpression(node, env, (l, r) => l - r),
-    6: (node, env) => binaryElementWiseExpression(node, env, (l, r) => l * r),
-    7: (node, env) => binaryElementWiseExpression(node, env, (l, r) => l / r),
-    8: (node, env) => binaryElementWiseExpression(node, env, (l, r) => Math.pow(l, r)),
-    9: (node, env) => unaryExpression(node, env, op => Math.cos(op)),
-    10: (node, env) => unaryExpression(node, env, op => Math.sin(op)),
-    11: (node, env) => unaryExpression(node, env, op => op !== 0 ? Math.log(op) : 0),
-    12: (node, env) => binaryElementWiseExpression(node, env, (l, r) => Math.min(l, r)),
-    13: (node, env) => binaryElementWiseExpression(node, env, (l, r) => Math.max(l, r)),
-    14: (node, env) => binaryColorExpression(node, env, (l, r) => l.r * r.r + l.g * r.g + l.b * r.b),
-    15: (node, env) => binaryColorExpression(node, env, (l, r) => bindColor({
-        r: l.g * r.b - l.b * r.g,
-        g: l.b * r.r - l.r * r.b,
-        b: l.r * r.g - l.g * r.r,
-    })),
-    16: (node, env) => unaryExpression(node, env, op => Math.round(op)),
-    17: (node, env) => unaryExpression(node, env, op => Math.abs(op)),
+    4: (node, env) => binaryElementWiseExpression(node, env, add),
+    5: (node, env) => binaryElementWiseExpression(node, env, sub),
+    6: (node, env) => binaryElementWiseExpression(node, env, mult),
+    7: (node, env) => binaryElementWiseExpression(node, env, div),
+    8: (node, env) => binaryElementWiseExpression(node, env, pow),
+    9: (node, env) => unaryExpression(node, env, cos),
+    10: (node, env) => unaryExpression(node, env, sin),
+    11: (node, env) => unaryExpression(node, env, log),
+    12: (node, env) => binaryElementWiseExpression(node, env, min),
+    13: (node, env) => binaryElementWiseExpression(node, env, max),
+    // 14: (node, env) => binaryElementWiseExpression(node, env, (l, r) => l.r * r.r + l.g * r.g + l.b * r.b),
+    15: (node, env) => binaryElementWiseExpression(node, env, cross),
+    16: (node, env) => unaryExpression(node, env, round),
+    17: (node, env) => unaryExpression(node, env, abs),
     18: noise,
     19: grad,
     20: blur,
     23: hsvToRGB,
-    24: (node, env) => binaryElementWiseExpression(node, env, (l, r) => l % r),
+    24: (node, env) => binaryElementWiseExpression(node, env, mod),
     28: ifs,
 };
 
 const geneticTextureDef = {
-    0: { args: [], return: PrimaryType.Number },
-    1: { args: [], return: PrimaryType.Number },
+    0: { args: [], return: PrimaryType.View },
+    1: { args: [], return: PrimaryType.View },
     2: { args: [PrimaryType.Number], return: PrimaryType.Color },
     3: { args: [PrimaryType.Number], return: PrimaryType.Number },
     4: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
@@ -871,7 +1118,7 @@ const geneticTextureDef = {
     11: { args: [PrimaryType.Any], return: PrimaryType.Any },
     12: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
     13: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-    14: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Number },
+    // 14: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Number },
     15: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Color },
     16: { args: [PrimaryType.Any], return: PrimaryType.Any },
     17: { args: [PrimaryType.Any], return: PrimaryType.Any },
@@ -879,48 +1126,19 @@ const geneticTextureDef = {
     19: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Color },
     23: { args: [PrimaryType.Color], return: PrimaryType.Color },
     24: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
+    28: { args: [], return: PrimaryType.View }
 };
 
-const geneticTextureReturns = {
-    [PrimaryType.Color]: [
-        { type: 2, args: [PrimaryType.Number], return: PrimaryType.Color },
-        { type: 4, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-        { type: 5, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-        // { type: 6, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-        { type: 7, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-        { type: 8, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-        { type: 9, args: [PrimaryType.Any], return: PrimaryType.Any },
-        { type: 10, args: [PrimaryType.Any], return: PrimaryType.Any },
-        // { type: 11, args: [PrimaryType.Any], return: PrimaryType.Any },
-        // { type: 12, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-        // { type: 13, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-        // { type: 15, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Color },
-        // { type: 16, args: [PrimaryType.Any], return: PrimaryType.Any },
-        { type: 17, args: [PrimaryType.Any], return: PrimaryType.Any },
-        // { type: 18, args: [], return: PrimaryType.Color },
-        { type: 19, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Color },
-        { type: 23, args: [PrimaryType.Color], return: PrimaryType.Color },
-        // { type: 24, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-    ],
-    [PrimaryType.Number]: [
-        { type: 0, args: [], return: PrimaryType.Number },
-        { type: 1, args: [], return: PrimaryType.Number },
-        { type: 3, args: [PrimaryType.Number], return: PrimaryType.Number },
-        { type: 4, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-        { type: 5, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-        // { type: 6, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-        { type: 7, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-        { type: 8, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-        { type: 9, args: [PrimaryType.Any], return: PrimaryType.Any },
-        { type: 10, args: [PrimaryType.Any], return: PrimaryType.Any },
-        // { type: 11, args: [PrimaryType.Any], return: PrimaryType.Any },
-        // { type: 12, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-        // { type: 13, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-        // { type: 14, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Number },
-        // { type: 16, args: [PrimaryType.Any], return: PrimaryType.Any },
-        { type: 17, args: [PrimaryType.Any], return: PrimaryType.Any },
-        // { type: 24, args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-    ],
+const primaryTypes = [ PrimaryType.Any, PrimaryType.Color, PrimaryType.Number, PrimaryType.View ];
+const geneticTextureReturns = {};
+for (const primaryType of primaryTypes) {
+    geneticTextureReturns[primaryType] = Object
+        .entries(geneticTextureDef)
+        .map(kvp => Object.assign({ type: +kvp[0] }, kvp[1]))
+        .filter(textureDef => primaryType === PrimaryType.Any
+            || textureDef.return === PrimaryType.Any
+            || textureDef.return === primaryType
+        );
 }
 
 function evalNode(node: Node, environment: Environment): Primary {
@@ -1017,7 +1235,7 @@ function generateRandomEvoArt(maxDepth: number): EvoArt {
     };
 }
 
-function getRandomNode(maxDepth: number, returns: PrimaryType = PrimaryType.Color, depth = 0): Node {
+function getRandomNode(maxDepth: number, returns: PrimaryType = PrimaryType.Any, depth = 0): Node {
 
     if (depth >= maxDepth - 1) {
         return getRandomTerminal(returns);
@@ -1121,18 +1339,27 @@ const testEvoArt: EvoArt = {
     // randomSeed: 0.8749907780955624,
     // randomSeed: 0.08404043122280003,
     // randomSeed: 0.668498006670335,
+    // randomSeed: 0.29440787532464996,
+    // randomSeed: 0.2912949809518597,
+    // randomSeed: 0.2531177940859146,
+    // randomSeed: 0.25778903296424893,
+    // randomSeed: 0.6300727200923126,
+    // randomSeed: 0.48709250419390915,
+    // randomSeed: 0.8115653593629433,
+    // randomSeed: 0.04641879573128804,
+    // randomSeed: 0.23501154853922235,
     randomSeed: rr,
     root: {
         texture: GeneticTexture.Mult,
         args: [
             {
-                texture: GeneticTexture.Blur,
-                args: [
-                    {
+                // texture: GeneticTexture.Blur,
+                // args: [
+                //     {
                         texture: GeneticTexture.Ifs,
                         args: [],
-                    },
-                ],
+                //     },
+                // ],
             },
             {
                 texture: GeneticTexture.Grad,
@@ -1238,7 +1465,7 @@ export class AppComponent {
         const context = this.canvas.nativeElement.getContext('2d') as CanvasRenderingContext2D;
         console.log(this, context)
         
-        renderEvoArt(context, testEvoArt, 512, 512);
+        renderEvoArt(context, testEvoArt, 1080, 1080);
 
         // Represent image as genetically derived equation
         // How to represent it in Solidity?
@@ -1251,7 +1478,7 @@ export class AppComponent {
 
         const randomEvoArt = generateRandomEvoArt(3);
 
-        renderEvoArt(context, randomEvoArt, 512, 512);
+        renderEvoArt(context, randomEvoArt, 1080, 1080);
 
         this.evoArtTree = JSON.stringify(randomEvoArt, null, 2);
     }
