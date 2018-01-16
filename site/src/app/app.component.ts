@@ -512,6 +512,65 @@ function toRGBView(env: Environment, primary: Primary): RGBView {
 //     // http://blog.simonrodriguez.fr/articles/30-07-2016_implementing_fxaa.html
 // }
 
+function filter(node: Node, env: Environment): View {
+
+    const operand = evalNode(node.args[0] as Node, env);
+    const inRGBView = toRGBView(env, operand);
+    const readRGB = inRGBView.read;
+
+    const outRGBView = env.newRGBView();
+    const writeRGB = outRGBView.write;
+
+    const range = 2;
+
+    const filterCoeficients = [
+        [(env.getRandom() * range) - range / 2, (env.getRandom() * range) - range / 2, (env.getRandom() * range) - range / 2],
+        [(env.getRandom() * range) - range / 2, (env.getRandom() * range) - range / 2, (env.getRandom() * range) - range / 2],
+        [(env.getRandom() * range) - range / 2, (env.getRandom() * range) - range / 2, (env.getRandom() * range) - range / 2],
+        // [1, 1, 1],
+        // [1, 9, 1],
+        // [1, 1, 1],
+    ];
+    console.log(filterCoeficients)
+    const height = env.height;
+    const width = env.width;
+    const adjHeight = height - 1;
+    const adjWidth = width - 1;
+
+    for (let x = 1; x < adjWidth; x++) {
+        for (let y = 1; y < adjHeight; y++) {
+
+            let r = 0;
+            let g = 0;
+            let b = 0;
+
+            for (let u = -1; u < 2; u++) {
+                for (let v = -1; v < 2; v++) {
+
+                    const uvx = x + u;
+                    const uvy = y + v;
+
+                    let uv8 = (uvy * width + uvx) * 4;
+
+                    const filterCoeficient = filterCoeficients[u + 1][v + 1];
+
+                    r += readRGB[uv8] * filterCoeficient;
+                    g += readRGB[++uv8] * filterCoeficient;
+                    b += readRGB[++uv8] * filterCoeficient;
+                }
+            }
+
+            writeRGB[y * width + x] =
+                -16777216 |
+                (Math.min(Math.max(Math.round(b), 0), 255) << 16) |
+                (Math.min(Math.max(Math.round(g), 0), 255) << 8) |
+                Math.min(Math.max(Math.round(r), 0), 255);
+        }
+    }
+
+    return outRGBView;
+}
+
 // xn+1 = a xn + b yn + c
 // yn+1 = d xn + e yn + f
 function ifs(node: Node, env: Environment): BWView {
@@ -586,7 +645,6 @@ function blur(node: Node, env: Environment): View {
 
     const operand = wrapWithType(evalNode(node.args[0] as Node, env));
 
-    
     if (operand.type !== PrimaryType.View || (operand.value as View).type === ViewType.RGB) {
         
         const sourceRGBView = toRGBView(env, operand.value);
@@ -1102,6 +1160,7 @@ const geneticTextureEval = {
     18: noise,
     19: grad,
     20: blur,
+    22: filter,
     23: hsvToRGB,
     24: (node, env) => binaryElementWiseExpression(node, env, mod),
     28: ifs,
@@ -1110,7 +1169,7 @@ const geneticTextureEval = {
 const geneticTextureDef = {
     0: { args: [], return: PrimaryType.View },
     1: { args: [], return: PrimaryType.View },
-    2: { args: [PrimaryType.Number], return: PrimaryType.Color },
+    2: { args: [], return: PrimaryType.Color },
     3: { args: [PrimaryType.Number], return: PrimaryType.Number },
     4: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
     5: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
@@ -1129,6 +1188,7 @@ const geneticTextureDef = {
     18: { args: [], return: PrimaryType.View },
     19: { args: [PrimaryType.Color, PrimaryType.Color], return: PrimaryType.View },
     20: { args: [PrimaryType.View], return: PrimaryType.View },
+    22: { args: [PrimaryType.Any], return: PrimaryType.View },
     23: { args: [PrimaryType.View], return: PrimaryType.View },
     24: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
     28: { args: [], return: PrimaryType.View }
@@ -1187,7 +1247,7 @@ function bwToRGB(env: Environment, bwView: BWView): RGBView {
 
             const i = y * width + x;
 
-            const bwValue = Math.round(bwRead[i] * 255);
+            const bwValue = Math.round((bwRead[i] + 1) / 2 * 255);
 
             writeRGB[i] = 
                 -16777216 |
@@ -1381,37 +1441,43 @@ const testEvoArt: EvoArt = {
     // randomSeed: 0.0011663862123056923,
     // randomSeed: 0.13245597201370352,
     // randomSeed: 0.9496387914608209,
+    // randomSeed: 0.8325282664212172,
     randomSeed: rr,
     root: {
-        texture: GeneticTexture.Mult,
+        texture: GeneticTexture.Filter,
         args: [
             {
-                // texture: GeneticTexture.Blur,
-                // args: [
-                //     {
-                        texture: GeneticTexture.Ifs,
-                        args: [],
-                //     },
-                // ],
-            },
-            {
-                texture: GeneticTexture.Grad,
+                texture: GeneticTexture.Mult,
                 args: [
                     {
-                        texture: GeneticTexture.Color,
-                        args: [{
-                            r: 65 / 255,
-                            g: 126 / 255,
-                            b: 231 / 255,
-                        }],
+                        // texture: GeneticTexture.Blur,
+                        // args: [
+                        //     {
+                                texture: GeneticTexture.Ifs,
+                                args: [],
+                        //     },
+                        // ],
                     },
                     {
-                        texture: GeneticTexture.Color,
-                        args: [{
-                            r: 234 / 255,
-                            g: 15 / 255,
-                            b: 93 / 255,
-                        }],
+                        texture: GeneticTexture.Grad,
+                        args: [
+                            {
+                                texture: GeneticTexture.Color,
+                                args: [{
+                                    r: 65 / 255,
+                                    g: 126 / 255,
+                                    b: 231 / 255,
+                                }],
+                            },
+                            {
+                                texture: GeneticTexture.Color,
+                                args: [{
+                                    r: 234 / 255,
+                                    g: 15 / 255,
+                                    b: 93 / 255,
+                                }],
+                            },
+                        ],
                     },
                 ],
             },
@@ -1495,6 +1561,12 @@ const testEvoArt: EvoArt = {
 //     },
 // };
 
+// Implement generic filter operator w/ random weights // DONE
+// Implement classic filters
+// FXAA
+// Implement random blotches of color
+// Simplify everything to work only with Views, except for things that require non-views?
+
 @Component({
     selector: 'app-root',
     templateUrl: './app.component.html',
@@ -1522,7 +1594,7 @@ export class AppComponent {
 
         const context = this.canvas.nativeElement.getContext('2d') as CanvasRenderingContext2D;
 
-        const randomEvoArt = generateRandomEvoArt(4);
+        const randomEvoArt = generateRandomEvoArt(3);
 
         renderEvoArt(context, randomEvoArt, 1080, 1080);
 
