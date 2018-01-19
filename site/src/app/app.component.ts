@@ -12,6 +12,7 @@ const mlog = Math.log;
 const mabs = Math.abs;
 const mfloor = Math.floor;
 const mceil = Math.ceil;
+const matan = Math.atan;
 
 /*
     +, -, *, /, mod, round, min, max, abs, expt, log, and, 
@@ -52,6 +53,7 @@ export const enum GeneticTexture {
     CrossDissolve = 29,
     Rotate = 30,
     Swirl = 31,
+    Buldge = 32,
 }
 
 export type NodeArg = Node | number | Color;
@@ -487,6 +489,46 @@ function toRGBView(env: Environment, primary: Primary): RGBView {
 // function fxaa(node: Node, env: Environment): RGBView {
 //     // http://blog.simonrodriguez.fr/articles/30-07-2016_implementing_fxaa.html
 // }
+
+// add stuff from: https://github.com/josephg/noisejs
+
+function buldge(node: Node, env: Environment): View {
+
+    const left = evalNode(node.args[0] as Node, env) as number;
+    const coef = left * 2 - 1;
+
+    const right = evalNode(node.args[1] as Node, env) as View;
+    const rgbView = toRGBView(env, right);
+
+    const readRGB = rgbView.write;
+
+    const outRGBView = env.newRGBView();
+    const writeRGB = outRGBView.write;
+    writeRGB.fill(-16777216);
+
+    const height = env.height;
+    const width = env.width;
+
+    for (let x = 0; x < width; x++) {
+        for (let y = 0; y < height; y++) {
+
+            const xx = x / width * 2 - 1;
+            const yy = y / height * 2 - 1;
+
+            const r = xx * xx + yy * yy;
+            const rcoef = mpow(r, coef);
+
+            let u = mround((rcoef * xx + 1) / 2 * width);
+            let v = mround((rcoef * yy + 1) / 2 * height);
+
+            if (u >= 0 && v >= 0 && u < width && v < height) {
+                writeRGB[y * width + x] = readRGB[v * width + u];
+            }
+        }
+    }
+
+    return outRGBView;
+}
 
 function swirl(node: Node, env: Environment): View {
 
@@ -1217,6 +1259,7 @@ const geneticTextureEval = {
     28: ifs,
     30: rotate,
     31: swirl,
+    32: buldge,
 };
 
 // const geneticTextureDef = {
@@ -1275,6 +1318,7 @@ const geneticTextureDef = {
     28: { args: [], return: PrimaryType.View },
     30: { args: [PrimaryType.Number, PrimaryType.View], return: PrimaryType.View },
     31: { args: [PrimaryType.Number, PrimaryType.View], return: PrimaryType.View },
+    32: { args: [PrimaryType.Number, PrimaryType.View], return: PrimaryType.View },
 };
 
 const primaryTypes = [ PrimaryType.Any, PrimaryType.Color, PrimaryType.Number, PrimaryType.View ];
@@ -1565,7 +1609,7 @@ const testEvoArt: EvoArt = {
     //     ],
     // },
     root: {
-        texture: GeneticTexture.Swirl,
+        texture: GeneticTexture.Buldge,
         args: [
             {
                 texture: GeneticTexture.Const,
@@ -1719,7 +1763,7 @@ export class AppComponent {
 
         const context = this.canvas.nativeElement.getContext('2d') as CanvasRenderingContext2D;
 
-        const randomEvoArt = generateRandomEvoArt(5);
+        const randomEvoArt = generateRandomEvoArt(6);
 
         this.evoArtTree = JSON.stringify(randomEvoArt, null, 2);
 
