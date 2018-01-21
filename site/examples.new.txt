@@ -1,0 +1,58 @@
+{
+  "randomSeed": 0.16875640157086358,
+  "root": {
+    "texture": 5,
+    "args": [
+      {
+        "texture": 28,
+        "args": []
+      },
+      {
+        "texture": 1,
+        "args": []
+      }
+    ]
+  }
+}
+
+{
+  "randomSeed": 0.12689476597135152,
+  "root": {
+    "texture": 17,
+    "args": [
+      {
+        "texture": 22,
+        "args": [
+          {
+            "texture": 6,
+            "args": [
+              {
+                "texture": 22,
+                "args": [
+                  {
+                    "texture": 20,
+                    "args": [
+                      {
+                        "texture": 23,
+                        "args": [
+                          {
+                            "texture": 0,
+                            "args": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "texture": 0,
+                "args": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
