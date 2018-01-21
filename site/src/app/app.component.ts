@@ -14,6 +14,9 @@ const mabs = Math.abs;
 const mfloor = Math.floor;
 const mceil = Math.ceil;
 const matan = Math.atan;
+const mepow = Math.exp;
+
+const tau = Math.PI * 2;
 
 /*
     +, -, *, /, mod, round, min, max, abs, expt, log, and, 
@@ -58,6 +61,8 @@ export const enum GeneticTexture {
     PerlinNoise = 33,
     SimplexNoise = 34,
     PerlinRGBNoise = 35,
+    RadialGrad = 36,
+    PerlinRandomRGBNoise = 37,
 }
 
 export type NodeArg = Node | number | Color;
@@ -498,42 +503,93 @@ function perlinLines(node: Node, env: Environment): View {
 
 }
 
-function viewPerlin(node: Node, env: Environment): View {
+function radialGrad(node: Node, env: Environment): RGBView {
+    
+    const { r: lR, g: lG, b: lB } = evalNode(node.args[0] as Node, env) as Color;
+    const { r: rR, g: rG, b: rB } = evalNode(node.args[1] as Node, env) as Color;
 
-    const right = evalNode(node.args[0] as Node, env) as View;
-    const rgbView = toRGBView(env, right);
-    const readRGB = rgbView.read;
+    const rgbView = env.newRGBView();
+    const writeRGB = rgbView.write;
 
-    const outRGBView = env.newRGBView();
-    const writeRGB = outRGBView.write;
+    const height = env.height;
+    const width = env.width;
+    
+    for (let x = 0; x < width; x++) {
+
+        const xx = x / width * 2 - 1;
+
+        for (let y = 0; y < height; y++) {
+
+            const yy = y / height * 2 - 1;
+
+            const ip = msqrt(xx * xx + yy * yy);
+            const p = 1 - ip;
+
+            writeRGB[y * width + x] =
+                -16777216 |
+                (mround((lB * p + rB * ip) * 255) << 16) |
+                (mround((lG * p + rG * ip) * 255) << 8) |
+                mround((lR * p + rR * ip) * 255);
+        }
+    }
+
+    return rgbView;
+}
+
+// Parameterized color (x, y, z)
+// Perlin particles (fade, steps, c1, c2)
+// 
+
+function perlinRGB(node: Node, env: Environment): View {
+
+    const { r: lR, g: lG, b: lB } = node.args[0]
+        ? evalNode(node.args[0] as Node, env) as Color
+        : {
+            r: env.getRandom(),
+            g: env.getRandom(),
+            b: env.getRandom(),
+        };
+
+    const { r: rR, g: rG, b: rB } = node.args[1]
+        ? evalNode(node.args[1] as Node, env) as Color
+        : {
+            r: env.getRandom(),
+            g: env.getRandom(),
+            b: env.getRandom(),
+        };
+
+    const a = env.getRandom() * -10;
+    const z = env.getRandom() * 4 + 1;
+
+    const rgbView = env.newRGBView();
+    const writeRGB = rgbView.write;
 
     const height = env.height;
     const width = env.width;
 
-    const f = seed(env.getRandom(), simplex3);
+    const f = seed(env.getRandom(), perlin2);
 
     for (let x = 0; x < width; x++) {
+
+        const xx = x / width * 2 - 1;
+
         for (let y = 0; y < height; y++) {
 
-            const i32 = y * width + x;
-            let i8 = i32 * 4;
-
-            const xx = x / width * 2 - 1;
             const yy = y / height * 2 - 1;
 
-            const r = mfloor((f(xx, yy, (readRGB[i8] / 255) * 2 - 1) + 1) / 2 * 256);
-            const g = mfloor((f(xx, yy, (readRGB[++i8] / 255) * 2 - 1) + 1) / 2 * 256);
-            const b = mfloor((f(xx, yy, (readRGB[++i8] / 255) * 2 - 1) + 1) / 2 * 256);
+            const i = f(xx * z, yy * z)
+            const ip = 1 / (1 + mepow(a * i));
+            const p = 1 - ip;
 
-            writeRGB[i32] = 
+            writeRGB[y * width + x] =
                 -16777216 |
-                (b << 16) |
-                (g << 8) |
-                r;
+                (mround((lB * p + rB * ip) * 255) << 16) |
+                (mround((lG * p + rG * ip) * 255) << 8) |
+                mround((lR * p + rR * ip) * 255);
         }
     }
 
-    return outRGBView;
+    return rgbView;
 }
 
 function simplex(node: Node, env: Environment): View {
@@ -547,9 +603,11 @@ function simplex(node: Node, env: Environment): View {
     const f = seed(env.getRandom(), simplex2);
 
     for (let x = 0; x < width; x++) {
+
+        const xx = x / width * 2 - 1;
+
         for (let y = 0; y < height; y++) {
 
-            const xx = x / width * 2 - 1;
             const yy = y / height * 2 - 1;
 
             writeBW[y * width + x] = (f(xx, yy) + 1) / 2;
@@ -570,9 +628,11 @@ function perlin(node: Node, env: Environment): View {
     const f = seed(env.getRandom(), perlin2);
 
     for (let x = 0; x < width; x++) {
+
+        const xx = x / width * 2 - 1;
+
         for (let y = 0; y < height; y++) {
 
-            const xx = x / width * 2 - 1;
             const yy = y / height * 2 - 1;
 
             writeBW[y * width + x] = (f(xx, yy) + 1) / 2;
@@ -600,9 +660,11 @@ function buldge(node: Node, env: Environment): View {
     const width = env.width;
 
     for (let x = 0; x < width; x++) {
+
+        const xx = x / width * 2 - 1;
+
         for (let y = 0; y < height; y++) {
 
-            const xx = x / width * 2 - 1;
             const yy = y / height * 2 - 1;
 
             const r = xx * xx + yy * yy;
@@ -638,9 +700,11 @@ function swirl(node: Node, env: Environment): View {
     const width = env.width;
 
     for (let x = 0; x < width; x++) {
+
+        const xx = x / width * 2 - 1;
+
         for (let y = 0; y < height; y++) {
 
-            const xx = x / width * 2 - 1;
             const yy = y / height * 2 - 1;
 
             const thetap = msqrt(xx * xx + yy * yy) * theta;
@@ -674,9 +738,11 @@ function rotate(node: Node, env: Environment): View {
     const width = env.width;
 
     for (let x = 0; x < width; x++) {
+
+        const xx = x / width * 2 - 1;
+
         for (let y = 0; y < height; y++) {
 
-            const xx = x / width * 2 - 1;
             const yy = y / height * 2 - 1;
 
             let u = mround(((xx * mcos(theta) - yy * msin(theta)) + 1) / 2 * width);
@@ -724,9 +790,11 @@ function filter(node: Node, env: Environment): View {
             let b = 0;
 
             for (let u = -1; u < 2; u++) {
+
+                const uvx = x + u;
+
                 for (let v = -1; v < 2; v++) {
 
-                    const uvx = x + u;
                     const uvy = y + v;
 
                     let uv8 = (uvy * width + uvx) * 4;
@@ -848,9 +916,11 @@ function blur(node: Node, env: Environment): View {
                     let p = 0;
         
                     for (let u = -1; u < 2; u++) {
+
+                        const uvx = x + u;
+
                         for (let v = -1; v < 2; v++) {
                             
-                            const uvx = x + u;
                             const uvy = y + v;
 
                             // Could be unraveled more to handle special cases
@@ -903,9 +973,11 @@ function blur(node: Node, env: Environment): View {
                     let p = 0;
         
                     for (let u = -1; u < 2; u++) {
+
+                        const uvx = x + u;
+
                         for (let v = -1; v < 2; v++) {
                             
-                            const uvx = x + u;
                             const uvy = y + v;
 
                             // Could be unraveled more to handle special cases
@@ -1276,9 +1348,9 @@ const cos: UnaryOperations = {
     color: op => ({ r: (mcos(op.r) + 1) / 2 * 255, g: (mcos(op.g) + 1) / 2 * 255, b: (mcos(op.b) + 1) / 2 * 255 }),
     number: op => mcos(op),
     rgb: (o, op) => -16777216 |
-        (mround((mcos(op[o]) + 1) / 2 * 255) << 16) |
-        (mround((mcos(op[--o]) + 1) / 2 * 255) << 8) |
-        mround((mcos(op[--o]) + 1) / 2 * 255),
+        (mround((mcos(op[o] / 255 * tau) + 1) / 2 * 255) << 16) |
+        (mround((mcos(op[--o] / 255 * tau) + 1) / 2 * 255) << 8) |
+        mround((mcos(op[--o] / 255 * tau) + 1) / 2 * 255),
 };
 
 const sin: UnaryOperations = {
@@ -1286,9 +1358,9 @@ const sin: UnaryOperations = {
     color: op => ({ r: (msin(op.r) + 1) / 2 * 255, g: (msin(op.g) + 1) / 2 * 255, b: (msin(op.b) + 1) / 2 * 255 }),
     number: op => msin(op),
     rgb: (o, op) => -16777216 |
-        (mround((msin(op[o]) + 1) / 2 * 255) << 16) |
-        (mround((msin(op[--o]) + 1) / 2 * 255) << 8) |
-        mround((msin(op[--o]) + 1) / 2 * 255),
+        (mround((msin(op[o] / 255 * tau) + 1) / 2 * 255) << 16) |
+        (mround((msin(op[--o] / 255 * tau) + 1) / 2 * 255) << 8) |
+        mround((msin(op[--o] / 255 * tau) + 1) / 2 * 255),
 };
 
 const log: UnaryOperations = {
@@ -1351,36 +1423,10 @@ const geneticTextureEval = {
     [GeneticTexture.Buldge]: buldge,
     [GeneticTexture.PerlinNoise]: perlin,
     [GeneticTexture.SimplexNoise]: simplex,
-    [GeneticTexture.PerlinRGBNoise]: viewPerlin,
+    [GeneticTexture.PerlinRGBNoise]: perlinRGB,
+    [GeneticTexture.RadialGrad]: radialGrad,
+    [GeneticTexture.PerlinRandomRGBNoise]: perlinRGB,
 };
-
-// const geneticTextureDef = {
-//     0: { args: [], return: PrimaryType.View },
-//     1: { args: [], return: PrimaryType.View },
-//     2: { args: [], return: PrimaryType.Color },
-//     3: { args: [PrimaryType.Number], return: PrimaryType.Number },
-//     4: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-//     5: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-//     6: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-//     7: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-//     8: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-//     9: { args: [PrimaryType.Any], return: PrimaryType.Any },
-//     10: { args: [PrimaryType.Any], return: PrimaryType.Any },
-//     11: { args: [PrimaryType.Any], return: PrimaryType.Any },
-//     12: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-//     13: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-//     // 14: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Number },
-//     15: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-//     16: { args: [PrimaryType.Any], return: PrimaryType.Any },
-//     17: { args: [PrimaryType.Any], return: PrimaryType.Any },
-//     18: { args: [], return: PrimaryType.View },
-//     19: { args: [PrimaryType.Color, PrimaryType.Color], return: PrimaryType.View },
-//     20: { args: [PrimaryType.View], return: PrimaryType.View },
-//     22: { args: [PrimaryType.Any], return: PrimaryType.View },
-//     23: { args: [PrimaryType.View], return: PrimaryType.View },
-//     24: { args: [PrimaryType.Any, PrimaryType.Any], return: PrimaryType.Any },
-//     28: { args: [], return: PrimaryType.View }
-// };
 
 const geneticTextureDef = {
     [GeneticTexture.X]: { args: [], return: PrimaryType.View },
@@ -1390,10 +1436,10 @@ const geneticTextureDef = {
     [GeneticTexture.Add]: { args: [PrimaryType.View, PrimaryType.View], return: PrimaryType.View },
     [GeneticTexture.Sub]: { args: [PrimaryType.View, PrimaryType.View], return: PrimaryType.View },
     [GeneticTexture.Mult]: { args: [PrimaryType.View, PrimaryType.View], return: PrimaryType.View },
-    // [GeneticTexture.Div]: { args: [PrimaryType.View, PrimaryType.View], return: PrimaryType.View },
+    [GeneticTexture.Div]: { args: [PrimaryType.View, PrimaryType.View], return: PrimaryType.View },
     // [GeneticTexture.Pow]: { args: [PrimaryType.View, PrimaryType.View], return: PrimaryType.View }, //
-    // [GeneticTexture.Cos]: { args: [PrimaryType.View], return: PrimaryType.View }, // 
-    // [GeneticTexture.Sin]: { args: [PrimaryType.View], return: PrimaryType.View }, // 
+    [GeneticTexture.Cos]: { args: [PrimaryType.View], return: PrimaryType.View }, // 
+    [GeneticTexture.Sin]: { args: [PrimaryType.View], return: PrimaryType.View }, // 
     // [GeneticTexture.Log]: { args: [PrimaryType.View], return: PrimaryType.View }, //
     [GeneticTexture.Min]: { args: [PrimaryType.View, PrimaryType.View], return: PrimaryType.View },
     [GeneticTexture.Max]: { args: [PrimaryType.View, PrimaryType.View], return: PrimaryType.View },
@@ -1412,7 +1458,9 @@ const geneticTextureDef = {
     [GeneticTexture.Buldge]: { args: [PrimaryType.Number, PrimaryType.View], return: PrimaryType.View },
     [GeneticTexture.PerlinNoise]: { args: [], return: PrimaryType.View },
     [GeneticTexture.SimplexNoise]: { args: [], return: PrimaryType.View },
-    [GeneticTexture.PerlinRGBNoise]: { args: [PrimaryType.View], return: PrimaryType.View },
+    [GeneticTexture.PerlinRGBNoise]: { args: [PrimaryType.Color, PrimaryType.Color], return: PrimaryType.View },
+    [GeneticTexture.RadialGrad]: { args: [PrimaryType.Color, PrimaryType.Color], return: PrimaryType.View },
+    [GeneticTexture.PerlinRandomRGBNoise]: { args: [], return: PrimaryType.View },
 };
 
 const primaryTypes = [ PrimaryType.Any, PrimaryType.Color, PrimaryType.Number, PrimaryType.View ];
@@ -1703,48 +1751,8 @@ const testEvoArt: EvoArt = {
     //     ],
     // },
     root: {
-        texture: GeneticTexture.PerlinRGBNoise,
-        args: [
-            // {
-            //     texture: GeneticTexture.Const,
-            //     args: [Math.random()],
-            // },
-            {
-                texture: GeneticTexture.Mult,
-                args: [
-                    {
-                        // texture: GeneticTexture.Blur,
-                        // args: [
-                        //     {
-                                texture: GeneticTexture.Ifs,
-                                args: [],
-                        //     },
-                        // ],
-                    },
-                    {
-                        texture: GeneticTexture.Grad,
-                        args: [
-                            {
-                                texture: GeneticTexture.Color,
-                                args: [{
-                                    r: 65 / 255,
-                                    g: 126 / 255,
-                                    b: 231 / 255,
-                                }],
-                            },
-                            {
-                                texture: GeneticTexture.Color,
-                                args: [{
-                                    r: 234 / 255,
-                                    g: 15 / 255,
-                                    b: 93 / 255,
-                                }],
-                            },
-                        ],
-                    },
-                ],
-            }
-        ]
+        texture: GeneticTexture.PerlinRandomRGBNoise,
+        args: [],
     }
 };
 
