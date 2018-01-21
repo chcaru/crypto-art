@@ -63,6 +63,10 @@ export const enum GeneticTexture {
     PerlinRGBNoise = 35,
     RadialGrad = 36,
     PerlinRandomRGBNoise = 37,
+    PerlinParticles2 = 38,
+    PerlinParticles3 = 39,
+    PerlinParticleStreams = 40,
+    PerlinParticlesRGB2 = 41,
 }
 
 export type NodeArg = Node | number | Color;
@@ -499,8 +503,218 @@ function toRGBView(env: Environment, primary: Primary): RGBView {
 //     // http://blog.simonrodriguez.fr/articles/30-07-2016_implementing_fxaa.html
 // }
 
-function perlinLines(node: Node, env: Environment): View {
+function perlinParticlesRGB2(node: Node, env: Environment): View {
 
+    const { r: lR, g: lG, b: lB } = evalNode(node.args[0] as Node, env) as Color;
+    const { r: rR, g: rG, b: rB } = evalNode(node.args[1] as Node, env) as Color;
+
+    const minParticles = 500;
+    const maxParticles = 5000;
+
+    const minSteps = 500;
+    const maxSteps = 1000;
+
+    const numParticles = env.getRandom() * (maxParticles - minParticles) + minParticles;
+    const numSteps = env.getRandom() * (maxSteps - minSteps) + minSteps;
+    const fade = env.getRandom() / 2 + .25;
+    const angularVelocity = env.getRandom() * 5;
+
+    const outRGBView = env.newRGBView();
+    const writeRGB = outRGBView.write;
+
+    const height = env.height;
+    const width = env.width;
+
+    const zoom = env.getRandom() * 3 + 1;
+
+    const f = seed(env.getRandom(), perlin2);
+
+    for (let i = 0; i < numParticles; i++) {
+
+        let x = env.getRandom() * width;
+        let y = env.getRandom() * height;
+        const a = env.getRandom() * tau;
+
+        writeRGB[mfloor(y) * width + mfloor(x)] = 
+            -16777216 |
+            (mround(lB * 255) << 16) |
+            (mround(lG * 255) << 8) |
+            mround(lR * 255);
+
+        for (let s = 0; s < numSteps; s++) {
+
+            const p = ((numSteps - s) / numSteps);
+
+            const d = f(x / width * zoom, y / height * zoom);
+            const a = d * tau * angularVelocity;
+
+            const v = p //* fade;
+            const iv = 1 - v;
+
+            x += mcos(a);
+            y += msin(a);
+
+            writeRGB[mfloor(y) * width + mfloor(x)] = 
+                -16777216 |
+                (mround((lB * v + rB * iv) * 255) << 16) |
+                (mround((lG * v + rG * iv) * 255) << 8) |
+                (mround(lR * v + rR * iv) * 255);
+        }
+    }
+
+    return outRGBView;
+}
+
+function perlinParticles3(node: Node, env: Environment): View {
+
+    const minParticles = 100;
+    const maxParticles = 1000;
+
+    const minSteps = 100;
+    const maxSteps = 2000;
+
+    const numParticles = env.getRandom() * (maxParticles - minParticles) + minParticles;
+    const numSteps = env.getRandom() * (maxSteps - minSteps) + minSteps;
+    const fade = env.getRandom();
+    const angularVelocity = env.getRandom() * 5;
+
+    const outBWView = env.newBWView();
+    const writeBW = outBWView.write;
+
+    const height = env.height;
+    const width = env.width;
+
+    const zoom = env.getRandom() * 3 + 1;
+
+    const f = seed(env.getRandom(), perlin3);
+
+    for (let i = 0; i < numParticles; i++) {
+
+        let x = env.getRandom() * width;
+        let y = env.getRandom() * height;
+        const a = env.getRandom() * tau;
+
+        let v = 1.0;
+
+        writeBW[mfloor(y) * width + mfloor(x)] = v;
+
+        for (let s = 0; s < numSteps; s++) {
+
+            const p = ((numSteps - s) / numSteps);
+
+            const d = f(x / width * zoom, y / height * zoom, p);
+            const a = d * tau * angularVelocity;
+
+            const sf = p * fade;
+
+            x += mcos(a);
+            y += msin(a);
+
+            writeBW[mfloor(y) * width + mfloor(x)] = v * sf;
+        }
+    }
+
+    return outBWView;
+}
+
+function perlinParticles2(node: Node, env: Environment): View {
+
+    const minParticles = 500;
+    const maxParticles = 5000;
+
+    const minSteps = 500;
+    const maxSteps = 1000;
+
+    const numParticles = env.getRandom() * (maxParticles - minParticles) + minParticles;
+    const numSteps = env.getRandom() * (maxSteps - minSteps) + minSteps;
+    const fade = env.getRandom();
+    const angularVelocity = env.getRandom() * 5;
+
+    const outBWView = env.newBWView();
+    const writeBW = outBWView.write;
+
+    const height = env.height;
+    const width = env.width;
+
+    const zoom = env.getRandom() * 3 + 1;
+
+    const f = seed(env.getRandom(), perlin2);
+
+    for (let i = 0; i < numParticles; i++) {
+
+        let x = env.getRandom() * width;
+        let y = env.getRandom() * height;
+        let a = env.getRandom() * tau;
+
+        let v = 1.0;
+
+        writeBW[mfloor(y) * width + mfloor(x)] = v;
+
+        for (let s = 0; s < numSteps; s++) {
+
+            const d = f(x / width * zoom, y / height * zoom);
+            let aa = d * tau * angularVelocity;
+
+            const sf = ((numSteps - s) / numSteps) * fade;
+
+            x += mcos(aa);
+            y += msin(aa);
+
+            writeBW[mfloor(y) * width + mfloor(x)] = v * sf;
+        }
+    }
+
+    return outBWView;
+}
+
+function perlinParticleSteams2(node: Node, env: Environment): View {
+
+    const minParticles = 500;
+    const maxParticles = 5000;
+
+    const minSteps = 500;
+    const maxSteps = 1000;
+
+    const numParticles = env.getRandom() * (maxParticles - minParticles) + minParticles;
+    const numSteps = env.getRandom() * (maxSteps - minSteps) + minSteps;
+    const fade = env.getRandom();
+    const angularVelocity = env.getRandom() * 5;
+
+    const outBWView = env.newBWView();
+    const writeBW = outBWView.write;
+
+    const height = env.height;
+    const width = env.width;
+
+    const zoom = env.getRandom() * 3 + 1;
+
+    const f = seed(env.getRandom(), perlin2);
+
+    for (let i = 0; i < numParticles; i++) {
+
+        let x = env.getRandom() * width;
+        let y = env.getRandom() * height;
+        let a = env.getRandom() * tau;
+
+        let v = 1.0;
+
+        writeBW[mfloor(y) * width + mfloor(x)] = v;
+
+        for (let s = 0; s < numSteps; s++) {
+
+            const d = f(x / width * zoom, y / height * zoom);
+            a = d * tau * angularVelocity + a;
+
+            const sf = ((numSteps - s) / numSteps) * fade;
+
+            x += mcos(a);
+            y += msin(a);
+
+            writeBW[mfloor(y) * width + mfloor(x)] = v * sf;
+        }
+    }
+
+    return outBWView;
 }
 
 function radialGrad(node: Node, env: Environment): RGBView {
@@ -600,6 +814,9 @@ function simplex(node: Node, env: Environment): View {
     const height = env.height;
     const width = env.width;
 
+    const a = env.getRandom() * -10;
+    const z = env.getRandom() * 4 + 1;
+
     const f = seed(env.getRandom(), simplex2);
 
     for (let x = 0; x < width; x++) {
@@ -610,7 +827,7 @@ function simplex(node: Node, env: Environment): View {
 
             const yy = y / height * 2 - 1;
 
-            writeBW[y * width + x] = (f(xx, yy) + 1) / 2;
+            writeBW[y * width + x] = 1 / (1 + mepow(a * f(xx * z, yy * z)));
         }
     }
     console.log(outBWView)
@@ -625,6 +842,9 @@ function perlin(node: Node, env: Environment): View {
     const height = env.height;
     const width = env.width;
 
+    const a = env.getRandom() * -10;
+    const z = env.getRandom() * 4 + 1;
+
     const f = seed(env.getRandom(), perlin2);
 
     for (let x = 0; x < width; x++) {
@@ -635,7 +855,7 @@ function perlin(node: Node, env: Environment): View {
 
             const yy = y / height * 2 - 1;
 
-            writeBW[y * width + x] = (f(xx, yy) + 1) / 2;
+            writeBW[y * width + x] = 1 / (1 + mepow(a * f(xx * z, yy * z)));
         }
     }
 
@@ -1426,6 +1646,10 @@ const geneticTextureEval = {
     [GeneticTexture.PerlinRGBNoise]: perlinRGB,
     [GeneticTexture.RadialGrad]: radialGrad,
     [GeneticTexture.PerlinRandomRGBNoise]: perlinRGB,
+    [GeneticTexture.PerlinParticles2]: perlinParticles2,
+    [GeneticTexture.PerlinParticles3]: perlinParticles3,
+    [GeneticTexture.PerlinParticleStreams]: perlinParticleSteams2,
+    [GeneticTexture.PerlinParticlesRGB2]: perlinParticlesRGB2,
 };
 
 const geneticTextureDef = {
@@ -1437,13 +1661,13 @@ const geneticTextureDef = {
     [GeneticTexture.Sub]: { args: [PrimaryType.View, PrimaryType.View], return: PrimaryType.View },
     [GeneticTexture.Mult]: { args: [PrimaryType.View, PrimaryType.View], return: PrimaryType.View },
     [GeneticTexture.Div]: { args: [PrimaryType.View, PrimaryType.View], return: PrimaryType.View },
-    // [GeneticTexture.Pow]: { args: [PrimaryType.View, PrimaryType.View], return: PrimaryType.View }, //
+    [GeneticTexture.Pow]: { args: [PrimaryType.View, PrimaryType.View], return: PrimaryType.View }, //
     [GeneticTexture.Cos]: { args: [PrimaryType.View], return: PrimaryType.View }, // 
     [GeneticTexture.Sin]: { args: [PrimaryType.View], return: PrimaryType.View }, // 
-    // [GeneticTexture.Log]: { args: [PrimaryType.View], return: PrimaryType.View }, //
+    [GeneticTexture.Log]: { args: [PrimaryType.View], return: PrimaryType.View }, //
     [GeneticTexture.Min]: { args: [PrimaryType.View, PrimaryType.View], return: PrimaryType.View },
     [GeneticTexture.Max]: { args: [PrimaryType.View, PrimaryType.View], return: PrimaryType.View },
-    // [GeneticTexture.Cross]: { args: [PrimaryType.View, PrimaryType.View], return: PrimaryType.View },
+    [GeneticTexture.Cross]: { args: [PrimaryType.View, PrimaryType.View], return: PrimaryType.View },
     [GeneticTexture.Round]: { args: [PrimaryType.View], return: PrimaryType.View },
     [GeneticTexture.Abs]: { args: [PrimaryType.View], return: PrimaryType.View },
     // [GeneticTexture.Noise]: { args: [], return: PrimaryType.View },
@@ -1451,7 +1675,7 @@ const geneticTextureDef = {
     [GeneticTexture.Blur]: { args: [PrimaryType.View], return: PrimaryType.View },
     [GeneticTexture.Filter]: { args: [PrimaryType.View], return: PrimaryType.View },
     [GeneticTexture.HSVtoRGB]: { args: [PrimaryType.View], return: PrimaryType.View },
-    // [GeneticTexture.Mod]: { args: [PrimaryType.View, PrimaryType.View], return: PrimaryType.View },
+    [GeneticTexture.Mod]: { args: [PrimaryType.View, PrimaryType.View], return: PrimaryType.View },
     [GeneticTexture.Ifs]: { args: [], return: PrimaryType.View },
     [GeneticTexture.Rotate]: { args: [PrimaryType.Number, PrimaryType.View], return: PrimaryType.View },
     [GeneticTexture.Swirl]: { args: [PrimaryType.Number, PrimaryType.View], return: PrimaryType.View },
@@ -1461,6 +1685,10 @@ const geneticTextureDef = {
     [GeneticTexture.PerlinRGBNoise]: { args: [PrimaryType.Color, PrimaryType.Color], return: PrimaryType.View },
     [GeneticTexture.RadialGrad]: { args: [PrimaryType.Color, PrimaryType.Color], return: PrimaryType.View },
     [GeneticTexture.PerlinRandomRGBNoise]: { args: [], return: PrimaryType.View },
+    [GeneticTexture.PerlinParticles2]: { args: [], return: PrimaryType.View },
+    [GeneticTexture.PerlinParticles3]: { args: [], return: PrimaryType.View },
+    [GeneticTexture.PerlinParticleStreams]: { args: [], return: PrimaryType.View },
+    [GeneticTexture.PerlinParticlesRGB2]: { args: [PrimaryType.Color, PrimaryType.Color], return: PrimaryType.View },
 };
 
 const primaryTypes = [ PrimaryType.Any, PrimaryType.Color, PrimaryType.Number, PrimaryType.View ];
@@ -1751,8 +1979,25 @@ const testEvoArt: EvoArt = {
     //     ],
     // },
     root: {
-        texture: GeneticTexture.PerlinRandomRGBNoise,
-        args: [],
+        texture: GeneticTexture.PerlinParticlesRGB2,
+        args: [
+            {
+                texture: GeneticTexture.Color,
+                args: [{
+                    r: 65 / 255,
+                    g: 126 / 255,
+                    b: 231 / 255,
+                }],
+            },
+            {
+                texture: GeneticTexture.Color,
+                args: [{
+                    r: 234 / 255,
+                    g: 15 / 255,
+                    b: 93 / 255,
+                }],
+            },
+        ],
     }
 };
 
@@ -1859,13 +2104,17 @@ export class AppComponent {
         // Represent image as genetically derived equation
         // How to represent it in Solidity?
 
+
+        // Cross breeding - cheaper
+        // Bid to generate a new one, with customized probabilities for functions
+
     }
 
     public onNew(): void {
 
         const context = this.canvas.nativeElement.getContext('2d') as CanvasRenderingContext2D;
 
-        const randomEvoArt = generateRandomEvoArt(10);
+        const randomEvoArt = generateRandomEvoArt(6);
 
         this.evoArtTree = JSON.stringify(randomEvoArt, null, 2);
 
