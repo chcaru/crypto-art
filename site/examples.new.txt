@@ -586,3 +586,55 @@
     ]
   }
 }
+
+{
+  "randomSeed": 0.6595371226435454,
+  "root": {
+    "texture": 13,
+    "args": [
+      {
+        "texture": 32,
+        "args": [
+          {
+            "texture": 3,
+            "args": [
+              0.806444826449551
+            ]
+          },
+          {
+            "texture": 1,
+            "args": []
+          }
+        ]
+      },
+      {
+        "texture": 20,
+        "args": [
+          {
+            "texture": 10,
+            "args": [
+              {
+                "texture": 42,
+                "args": [
+                  {
+                    "texture": 7,
+                    "args": [
+                      {
+                        "texture": 1,
+                        "args": []
+                      },
+                      {
+                        "texture": 0,
+                        "args": []
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

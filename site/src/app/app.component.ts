@@ -15,6 +15,7 @@ const mfloor = Math.floor;
 const mceil = Math.ceil;
 const matan = Math.atan;
 const mepow = Math.exp;
+const matan2 = Math.atan2;
 
 const tau = Math.PI * 2;
 
@@ -67,6 +68,8 @@ export const enum GeneticTexture {
     PerlinParticles3 = 39,
     PerlinParticleStreams = 40,
     PerlinParticlesRGB2 = 41,
+    Ripple = 42,
+    CCFXAA = 43,
 }
 
 export type NodeArg = Node | number | Color;
@@ -499,9 +502,64 @@ function toRGBView(env: Environment, primary: Primary): RGBView {
     }
 }
 
-// function fxaa(node: Node, env: Environment): RGBView {
-//     // http://blog.simonrodriguez.fr/articles/30-07-2016_implementing_fxaa.html
-// }
+(window as any).abc = []
+
+function ccfxaa(node: Node, env: Environment): RGBView {
+    // http://blog.simonrodriguez.fr/articles/30-07-2016_implementing_fxaa.html
+
+    // 0.299*R + 0.587*G + 0.114*B
+
+    const operand = evalNode(node.args[0] as Node, env) as View;
+    const rgbView = toRGBView(env, operand);
+    const readRGB = rgbView.read;
+
+    const outRGBView = env.newRGBView();
+    const writeRGB = outRGBView.write;
+
+    const height = env.height;
+    const width = env.width;
+
+    for (let x = 1; x < width - 1; x++) {
+        for (let y = 1; y < height - 1; y++) {
+
+            const i32 = y * width + x;
+            const i8 = i32 * 4;
+
+            let tli = ((y - 1) * width + (x - 1)) * 4;
+            let ti = ((y - 1) * width + x) * 4;
+            let tri = ((y - 1) * width + (x + 1)) * 4;
+            let li = (y * width + (x - 1)) * 4;
+            let ci = y * width + x;
+            let ri = (y * width + (x + 1)) * 4;
+            let bli = ((y + 1) * width + (x - 1)) * 4;
+            let bi = ((y + 1) * width + x) * 4;
+            let bri = ((y + 1) * width + (x + 1)) * 4;
+
+            const tl = (readRGB[tli] + readRGB[++tli] + readRGB[++tli]) / 3 / 255;
+            const t = (readRGB[ti] + readRGB[++ti] + readRGB[++ti]) / 3 / 255;
+            const tr = (readRGB[tri] + readRGB[++tri] + readRGB[++tri]) / 3 / 255;
+            const l = (readRGB[li] + readRGB[++li] + readRGB[++li]) / 3 / 255;
+            const c = (readRGB[ci] + readRGB[++ci] + readRGB[++ci]) / 3 / 255;
+            const r = (readRGB[ri] + readRGB[++ri] + readRGB[++ri]) / 3 / 255;
+            const bl = (readRGB[bli] + readRGB[++bli] + readRGB[++bli]) / 3 / 255;
+            const b = (readRGB[bi] + readRGB[++bi] + readRGB[++bi]) / 3 / 255;
+            const br = (readRGB[bri] + readRGB[++bri] + readRGB[++bri]) / 3 / 255;
+
+            const gx = tl + (-tr) + l * 2 + r * -2 + bl + (-br);
+            const gy = tl + 2 * t + tr + (-bl) + -2 * b + (-br);
+
+            const a = gx !== 0 ? matan(gy / gx) : matan(Infinity);
+
+            if (a !== 0) { 
+                debugger;
+                // console.log(a);
+                (window as any).abc.push(a * 180 / Math.PI)
+            }
+        }
+    }
+
+    return rgbView;
+}
 
 function perlinParticlesRGB2(node: Node, env: Environment): View {
 
@@ -862,6 +920,47 @@ function perlin(node: Node, env: Environment): View {
     return outBWView;
 }
 
+function ripple(node: Node, env: Environment): View {
+
+    const right = evalNode(node.args[0] as Node, env) as View;
+    const rgbView = toRGBView(env, right);
+
+    const readRGB = rgbView.write;
+
+    const outRGBView = env.newRGBView();
+    const writeRGB = outRGBView.write;
+    writeRGB.fill(-16777216);
+
+    const i = env.getRandom() * 25;
+
+    const height = env.height;
+    const width = env.width;
+
+    for (let x = 0; x < width; x++) {
+
+        const xx = x / width * 2 - 1;
+
+        for (let y = 0; y < height; y++) {
+
+            const yy = y / height * 2 - 1;
+    
+            const c = mcos(xx * i);
+
+            let u = mround((xx + 1) / 2 * width);
+            let v = mround((c * xx + yy + 1) / 2 * height);
+
+            u = mmin(mmax(0, u), width - 1);
+            v = mmin(mmax(0, v), height - 1);
+
+            // if (u >= 0 && v >= 0 && u < width && v < height) {
+                writeRGB[y * width + x] = readRGB[v * width + u];
+            // }
+        }
+    }
+
+    return outRGBView;
+}
+
 function buldge(node: Node, env: Environment): View {
 
     const left = evalNode(node.args[0] as Node, env) as number;
@@ -893,9 +992,12 @@ function buldge(node: Node, env: Environment): View {
             let u = mround((rcoef * xx + 1) / 2 * width);
             let v = mround((rcoef * yy + 1) / 2 * height);
 
-            if (u >= 0 && v >= 0 && u < width && v < height) {
+            u = mmin(mmax(0, u), width - 1);
+            v = mmin(mmax(0, v), height - 1);
+
+            // if (u >= 0 && v >= 0 && u < width && v < height) {
                 writeRGB[y * width + x] = readRGB[v * width + u];
-            }
+            // }
         }
     }
 
@@ -932,9 +1034,12 @@ function swirl(node: Node, env: Environment): View {
             let u = mround(((xx * mcos(thetap) - yy * msin(thetap)) + 1) / 2 * width);
             let v = mround(((xx * msin(thetap) + yy * mcos(thetap)) + 1) / 2 * height);
 
-            if (u >= 0 && v >= 0 && u < width && v < height) {
+            u = mmin(mmax(0, u), width - 1);
+            v = mmin(mmax(0, v), height - 1);
+
+            // if (u >= 0 && v >= 0 && u < width && v < height) {
                 writeRGB[y * width + x] = readRGB[v * width + u];
-            }
+            // }
         }
     }
 
@@ -968,9 +1073,10 @@ function rotate(node: Node, env: Environment): View {
             let u = mround(((xx * mcos(theta) - yy * msin(theta)) + 1) / 2 * width);
             let v = mround(((xx * msin(theta) + yy * mcos(theta)) + 1) / 2 * height);
 
-            if (u >= 0 && v >= 0) {
-                writeRGB[y * width + x] = readRGB[v * width + u];
-            }
+            u = mmin(mmax(0, u), width - 1);
+            v = mmin(mmax(0, v), height - 1);
+        
+            writeRGB[y * width + x] = readRGB[v * width + u];
         }
     }
 
@@ -1650,6 +1756,8 @@ const geneticTextureEval = {
     [GeneticTexture.PerlinParticles3]: perlinParticles3,
     [GeneticTexture.PerlinParticleStreams]: perlinParticleSteams2,
     [GeneticTexture.PerlinParticlesRGB2]: perlinParticlesRGB2,
+    [GeneticTexture.Ripple]: ripple,
+    [GeneticTexture.CCFXAA]: ccfxaa,
 };
 
 const geneticTextureDef = {
@@ -1689,6 +1797,8 @@ const geneticTextureDef = {
     [GeneticTexture.PerlinParticles3]: { args: [], return: PrimaryType.View },
     [GeneticTexture.PerlinParticleStreams]: { args: [], return: PrimaryType.View },
     [GeneticTexture.PerlinParticlesRGB2]: { args: [PrimaryType.Color, PrimaryType.Color], return: PrimaryType.View },
+    [GeneticTexture.Ripple]: { args: [PrimaryType.View], return: PrimaryType.View },
+    [GeneticTexture.CCFXAA]: { args: [PrimaryType.View], return: PrimaryType.View },
 };
 
 const primaryTypes = [ PrimaryType.Any, PrimaryType.Color, PrimaryType.Number, PrimaryType.View ];
@@ -1979,23 +2089,32 @@ const testEvoArt: EvoArt = {
     //     ],
     // },
     root: {
-        texture: GeneticTexture.PerlinParticlesRGB2,
+        texture: GeneticTexture.CCFXAA,
         args: [
+            // {
+            //     texture: GeneticTexture.Const,
+            //     args: [Math.random()]
+            // },
             {
-                texture: GeneticTexture.Color,
-                args: [{
-                    r: 65 / 255,
-                    g: 126 / 255,
-                    b: 231 / 255,
-                }],
-            },
-            {
-                texture: GeneticTexture.Color,
-                args: [{
-                    r: 234 / 255,
-                    g: 15 / 255,
-                    b: 93 / 255,
-                }],
+                texture: GeneticTexture.PerlinParticlesRGB2,
+                args: [
+                    {
+                        texture: GeneticTexture.Color,
+                        args: [{
+                            r: 65 / 255,
+                            g: 126 / 255,
+                            b: 231 / 255,
+                        }],
+                    },
+                    {
+                        texture: GeneticTexture.Color,
+                        args: [{
+                            r: 234 / 255,
+                            g: 15 / 255,
+                            b: 93 / 255,
+                        }],
+                    },
+                ],
             },
         ],
     }
