@@ -1,6 +1,6 @@
 import { Component, ElementRef, ViewChild } from '@angular/core';
 
-import { EvoArt, GeneticTexture, renderEvoArt, generateRandomEvoArt } from './../shared/services/render';
+import { EvoArt, GeneticTexture, renderEvoArt, generateRandomEvoArt, prettyPrint } from './../shared/services/render';
 
 const rr = Math.random();
 console.log(rr);
@@ -193,9 +193,11 @@ export class AppComponent {
 
     public savedArt: EvoArt[] = [];
 
-    public evoArt: EvoArt = generateRandomEvoArt(20);
+    public evoArt: EvoArt = generateRandomEvoArt(5);
 
-    public evoArtTree: string = JSON.stringify(this.evoArt);
+    public evoArtTree: string = JSON.stringify(this.evoArt, null, 2);
+
+    public evoArtPrettyPrint = prettyPrint(this.evoArt.root);
 
     public ngAfterViewInit(): void {
 
@@ -216,6 +218,7 @@ export class AppComponent {
 
         this.evoArt = art;
         this.evoArtTree = JSON.stringify(art, null, 2);
+        this.evoArtPrettyPrint = prettyPrint(art.root);
     }
 
     public onDelete(index: number): void {
@@ -232,6 +235,6 @@ export class AppComponent {
 
     public onNew(): void {
 
-        this.onSelect(generateRandomEvoArt(30));
+        this.onSelect(generateRandomEvoArt(20));
     }
 }
