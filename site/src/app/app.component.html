@@ -1,5 +1,16 @@
-<canvas #test height="1080" width="1920"></canvas>
-<div></div>
-<button (click)="onNew()">New</button>
-<div></div>
+<evo-art height="1080" width="1080" [evoArt]="evoArt"></evo-art>
+<div>
+    <button (click)="onNew()">New</button>
+    <button (click)="onSave()">Save</button>
+</div>
+<div class="preview">
+    <evo-art *ngFor="let savedEvoArt of savedArt; let i = index"
+        (click)="onSelect(savedEvoArt)"
+        (keyup.shift.delete)="onDelete(i)"
+        tabindex="0"
+        height="25"
+        width="25"
+        [evoArt]="savedEvoArt">
+    </evo-art>
+</div>
 <pre>{{evoArtTree}}</pre>

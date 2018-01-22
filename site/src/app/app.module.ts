@@ -3,11 +3,13 @@ import { NgModule } from '@angular/core';
 
 
 import { AppComponent } from './app.component';
+import { EvoArtComponent } from '../shared/components/evo-art/evo-art.component';
 
 
 @NgModule({
   declarations: [
-    AppComponent
+    AppComponent,
+    EvoArtComponent,
   ],
   imports: [
     BrowserModule
